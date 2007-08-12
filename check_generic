@@ -19,6 +19,9 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #
 #
+# TODO
+# - performance output, how to gather?
+#
 # $Id$
 #
 #nagios: -epn
@@ -27,7 +30,7 @@ use strict;
 use Getopt::Long qw(:config no_ignore_case bundling);
 BEGIN { eval("use Time::HiRes qw(time)") }
 use lib "/usr/local/nagios/libexec";
-use vars qw($MYSELF %cmds $returncode %rc $no $VERSION
+use vars qw($MYSELF %opt %cmds %rc $command $returncode $no $VERSION
  $OK $WARNING $CRITICAL $UNKNOWN $DETAIL_LIST $DETAIL_RC $DETAIL_STDERR
  $DETAIL_PERFORMANCE);
 
@@ -52,7 +55,6 @@ $DETAIL_PERFORMANCE=8;
 #--- vars
 $no=0;
 %cmds=();
-$returncode=0;
 %rc=(
 	label	=> { $OK => "OK", $WARNING => "WARNING", $CRITICAL => "CRITICAL", $UNKNOWN => "UNKNOWN", },
 	s2r	=> { 0 => $OK, 2 => $WARNING, 3 => $CRITICAL, 1 => $UNKNOWN, },
@@ -72,7 +74,7 @@ my %opt=(
 	"libexec"	=> "/usr/local/nagios/libexec",
 	"name"		=> "CHANGEME",
 	"report"	=> 15,
-	"state"		=> -1,
+	"state"		=> 0,
 	"timeout"	=> 10,
 	"TIMEOUT"	=> 60,
 	"ok"		=> "0:0",
@@ -93,12 +95,12 @@ sub process_parameters {
 		"n|name=s"	=> \$opt{name},
 		"o|ok=s"	=> \$opt{ok},
 		"r|report:i"	=> \$opt{report},
-		"s|state=s"	=> \$opt{execute},
+		"s|state=s"	=> \$opt{state},
 		"t|timeout=i"	=> \$opt{timeout},
-		"u|unknown=s"	=> \$opt{unknown},)
+		"u|unknown=s"	=> \$opt{unknown},
 		"x|execute=s"	=> \$opt{execute},
 		"V|version"	=> \$opt{version},
-		"w|warning=s"	=> \$opt{warning},
+		"w|warning=s"	=> \$opt{warning},)
 	) {
 		short_usage();
         	return $UNKNOWN;
@@ -108,13 +110,11 @@ sub process_parameters {
 		print "$MYSELF: v$VERSION\n";
         	return $UNKNOWN;
 	}
-
 	if ($opt{help}) {
 		short_usage();
         	long_usage();
         	return $UNKNOWN;
 	}
-
 	if (!$opt{execute}) {
         	print "$MYSELF error: no commandline specified\n";
 		short_usage();
@@ -126,10 +126,10 @@ sub process_parameters {
         	return $UNKNOWN;
 	}
 	if ($opt{state} && (
-		$opt{state} ne "o" && $opt{state} ne "OK} &&
-		$opt{state} ne "u" && $opt{state} ne "UNKNOWN"} &&
-		$opt{state} ne "w" && $opt{state} ne "WARNING"} &&
-		$opt{state} ne "c" && $opt{state} ne "CRITICAL"})) {
+		$opt{state} ne "o" && $opt{state} ne "OK" &&
+		$opt{state} ne "u" && $opt{state} ne "UNKNOWN" &&
+		$opt{state} ne "w" && $opt{state} ne "WARNING" &&
+		$opt{state} ne "c" && $opt{state} ne "CRITICAL")) {
 		print "$MYSELF error: unknown state $opt{state}, should be u|UNKNOWN w|WARNING c|critical o|OK\n";
                 short_usage();
                 return $UNKNOWN;
@@ -342,10 +342,10 @@ sub parse_commands {
 }
 
 #---
-#--- execute command number $no from %cmds
+#--- execute $command, return result in %cmds 
 #---
 sub exec_command {
-	my ($no)=@_;
+	my ($cmd)=@_;
 	my $tmp_stdout="";
 	my $tmp_stderr="";
 
@@ -359,28 +359,22 @@ sub exec_command {
 		$tmp_stderr=&get_tmpfile("/tmp", "${MYSELF}_stderr_$$");
 
 		#--- execute command and store stdout/stderr/return code
-		`$opt{libexec}/$cmds{$no}{command} 1>$tmp_stdout 2>$tmp_stderr`;
-		$cmds{$no}{rc}=$? >> 8;
+		`$command 1>$tmp_stdout 2>$tmp_stderr`;
+		$cmds{no}{rc}=$? >> 8;
 
 		#--- store stdout/stderr and cleanup tmpfiles
-		$cmds{$no}{output}=readfile($tmp_stdout);
-		$cmds{$no}{stderr}=readfile($tmp_stderr);
+		$cmds{no}{output}=readfile($tmp_stdout);
+		$cmds{no}{stderr}=readfile($tmp_stderr);
 		unlink $tmp_stdout, $tmp_stderr;
 
 		#--- unknown return code? change it explicitly to UNKNOWN
-		if (! $cmds{$no}{rc} > $UNKNOWN) {
-			$cmds{$no}{stderr}.=" RC was $cmds{$no}{rc}!";
-			$cmds{$no}{rc}=$UNKNOWN;
+		if (! $cmds{no}{rc} > $UNKNOWN) {
+			$cmds{no}{stderr}.=" RC was $cmds{no}{rc}!";
+			$cmds{no}{rc}=$UNKNOWN;
 		}
 		
 		#--- remove white chars from output
-		$cmds{$no}{output}=mytrim($cmds{$no}{output},"\\n\\s");
-
-		#--- split performance data from standard output
-		if ($cmds{$no}{output}=~/\|/) {
-			($cmds{$no}{output},$cmds{$no}{performance})=split(/\|/,$cmds{$no}{output});
-			$cmds{$no}{performance}=mytrim($cmds{$no}{performance},"\\s");
-		}
+		$cmds{no}{output}=mytrim($cmds{no}{output},"\\n\\s");
 
 		alarm(0);
 	};
@@ -389,8 +383,8 @@ sub exec_command {
 	if ($@) {
 		#--- timeout encountered: store status
 		if ($@ =~ /timeout/) {
-			$cmds{$no}{output}="UNKNOWN - $cmds{$no}{plugin} cancelled after timeout ($opt{timeout}s)";
-			$cmds{$no}{rc}=$UNKNOWN;
+			$cmds{no}{output}="UNKNOWN - \'$command\' cancelled after timeout ($opt{timeout}s)";
+			$cmds{no}{rc}=$UNKNOWN;
 		#--- catchall for unknown errors
 		} else {
 			alarm(0);
@@ -398,7 +392,7 @@ sub exec_command {
 		}
 		unlink $tmp_stdout, $tmp_stderr;
 	}
-	return $cmds{$no}{rc};
+	return $cmds{no}{rc};
 }
 
 #---
@@ -468,25 +462,16 @@ sub do_report {
 #--- parse command line options
 exit $UNKNOWN if (&process_parameters != $OK);
 
-#--- parse command file (nrpe format)
-exit $UNKNOWN if (&parse_commands($opt{filename}) == 0);
-
 #--- initialize timer for overall timeout
 $rc{starttime}=time;
 $rc{endtime}=$rc{starttime} + $opt{TIMEOUT};
 
-#--- loop over commands in order of config file
-foreach $no (sort numerically keys %cmds) {
-	
-	#--- if total timeout is going to be exceeded, cancel next commands
-	if (time + $opt{timeout} > $rc{endtime}) {
-		$cmds{$no}{output}="UNKNOWN - execution cancelled after global timeout ($opt{TIMEOUT}s)";
-		$cmds{$no}{rc}=$UNKNOWN;
-		$rc{count}{$UNKNOWN}++;
-		$rc{list}{$UNKNOWN}.="$cmds{$no}{name},";
-		next;
-	}
-		
+$no=0;
+foreach ($opt{execute}) {
+
+	#--- fetch command
+	$cmds{++$no}{command}=$_;
+
 	#--- execute command
 	&exec_command($no);
 }
