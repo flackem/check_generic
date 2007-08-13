@@ -194,21 +194,21 @@ Options:
    plugin name (shown in output), default: $opt{name}
 -t, --timeout
    timeout for one command, default: $opt{timeout}
--r, --report <level>
-   specify level of details in output (level is binary coded, just add all options)
-   default: $opt{report}
-      1: mention service names in plugin_output, e.g.
-         "24 plugins checked, 1 critical (http), 0 warning, 0 unknown, 23 ok"
-      2: show STATE in front of each line of plugin output, e.g.
-         "[16] OK system_ssh - SSH OK - OpenSSH_4.4 (protocol 1.99)"
-      4: show STDERR (if any) in each line of plugin output
-      8: show performance data
 -h, --help
    print detailed help screen
 -V, --version
    print version information
 LONGEOF
 
+#-r, --report <level>
+#  specify level of details in output (level is binary coded, just add all options)
+#   default: $opt{report}
+#      1: mention service names in plugin_output, e.g.
+#         "24 plugins checked, 1 critical (http), 0 warning, 0 unknown, 23 ok"
+#      2: show STATE in front of each line of plugin output, e.g.
+#         "[16] OK system_ssh - SSH OK - OpenSSH_4.4 (protocol 1.99)"
+#      4: show STDERR (if any) in each line of plugin output
+#      8: show performance data
 }
 
 #---
@@ -485,7 +485,7 @@ sub do_report {
 #---
 sub do_analysis {
         my ($no)=@_;
-	my $returncode=-1;
+	my $returncode=$rc{number}{$opt{false}};
 
 	#--- first: check return code
 	if ($cmds{$no}{rc} != 0) {
@@ -495,12 +495,10 @@ sub do_analysis {
 
 	foreach my $severity ("ok","unknown","warning","critical") {
 		if ($opt{$severity}) {
-			$cmds{$no}{condition}=$opt{$severity};
 			print "DEBUG eval $cmds{$no}{output} <-> $opt{$severity}\n";
 			if (eval("\"$cmds{$no}{output}\"$opt{$severity}")) {
+				$cmds{$no}{condition}=$opt{$severity};
 				$returncode=$rc{number}{$severity};
-			} else {
-				$returncode=$rc{complement}{$rc{number}{$severity}};
 			}
 			print "DEBUG rc:$returncode $cmds{$no}{output}$opt{$severity}\n";
 		}
