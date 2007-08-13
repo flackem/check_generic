@@ -22,6 +22,7 @@
 # TODO
 # - performance output, how to gather?
 #
+#
 # $Id$
 #
 #nagios: -epn
@@ -57,9 +58,11 @@ $no=0;
 %cmds=();
 %rc=(
 	label	=> { $OK => "OK", $WARNING => "WARNING", $CRITICAL => "CRITICAL", $UNKNOWN => "UNKNOWN", },
+	number	=> { "OK" => $OK, "WARNING" => $WARNING, "CRITICAL" => $CRITICAL, "UNKNOWN" => $UNKNOWN, 
+	             "ok" => $OK, "warning" => $WARNING, "critical" => $CRITICAL, "unknown" => $UNKNOWN, },
 	s2r	=> { 0 => $OK, 2 => $WARNING, 3 => $CRITICAL, 1 => $UNKNOWN, },
 	r2s	=> { $OK => 0, $WARNING => 2, $CRITICAL => 3, $UNKNOWN => 1, },
-	count	=> { $OK => 0, $WARNING => 0, $CRITICAL => 0, $UNKNOWN => 0, },
+	complement => { $OK => $CRITICAL, $WARNING => $OK, $CRITICAL => $OK, $UNKNOWN => $OK, },
 	minimum => { $OK => 0, $WARNING => 1, $CRITICAL => 1, $UNKNOWN => 1, },
 	maximum => { $OK => 0, $WARNING => 1, $CRITICAL => 1, $UNKNOWN => 1, },
 	list	=> { $OK => [],$WARNING => [],$CRITICAL => [],$UNKNOWN => [], },
@@ -74,13 +77,12 @@ my %opt=(
 	"libexec"	=> "/usr/local/nagios/libexec",
 	"name"		=> "CHANGEME",
 	"report"	=> 15,
-	"state"		=> 0,
 	"timeout"	=> 10,
 	"TIMEOUT"	=> 60,
-	"ok"		=> "0:0",
-	"warning"	=> "1:1",
-	"critical"	=> "1:1",
-	"unknown"	=> "1:1",
+	#"ok"		=> "0:0",
+	#"warning"	=> "1:1",
+	#"critical"	=> "1:1",
+	#"unknown"	=> "1:1",
 );
 	
 #-------------------------------------------------------------------------------
@@ -95,7 +97,7 @@ sub process_parameters {
 		"n|name=s"	=> \$opt{name},
 		"o|ok=s"	=> \$opt{ok},
 		"r|report:i"	=> \$opt{report},
-		"s|state=s"	=> \$opt{state},
+		"f|false=s"	=> \$opt{false},
 		"t|timeout=i"	=> \$opt{timeout},
 		"u|unknown=s"	=> \$opt{unknown},
 		"x|execute=s"	=> \$opt{execute},
@@ -124,6 +126,12 @@ sub process_parameters {
         	print "$MYSELF error: no expression (to compare result) specified\n";
 		short_usage();
         	return $UNKNOWN;
+	} else {
+		print "DEBUG: $opt{ok} " if ($opt{ok});
+		print "DEBUG: $opt{unknown} " if ($opt{unknown});
+		print "DEBUG: $opt{warning} " if ($opt{warning});
+		print "DEBUG: $opt{critical} " if ($opt{critical});
+		print "\n";
 	}
 	if ($opt{state} && (
 		$opt{state} ne "o" && $opt{state} ne "OK" &&
@@ -133,14 +141,27 @@ sub process_parameters {
 		print "$MYSELF error: unknown state $opt{state}, should be u|UNKNOWN w|WARNING c|critical o|OK\n";
                 short_usage();
                 return $UNKNOWN;
-	} 
+	} else {
+		$opt{state}=$rc{label}{$CRITICAL};
+	}
+	if ($opt{false} && (
+		$opt{false} ne "o" && $opt{false} ne "OK" &&
+		$opt{false} ne "u" && $opt{false} ne "UNKNOWN" &&
+		$opt{false} ne "w" && $opt{false} ne "WARNING" &&
+		$opt{false} ne "c" && $opt{false} ne "CRITICAL")) {
+		print "$MYSELF error: unknown false $opt{false}, should be u|UNKNOWN w|WARNING c|critical o|OK\n";
+                short_usage();
+                return $UNKNOWN;
+	} else {
+		$opt{false}=($opt{state}) ? $rc{complement}{$opt{state}} : "UNKNOWN";
+	}
 	return $OK;
 }
 
 sub short_usage {
 print <<SHORTEOF;
 
-$MYSELF -x <cmdline> -[o|u|w|c] <expression> [-s state] [-n name] [-t timeout] [-r level]
+$MYSELF -x <cmdline> -o|u|w|c <expression> [-s state] [-f false_state] [-n name] [-t timeout] [-r level]
 $MYSELF [-h | --help]
 $MYSELF [-V | --version]
 SHORTEOF
@@ -153,7 +174,7 @@ Options:
 -x, --execute <cmdline>
    string which contains commands to be executed
    (can be a complete filter chain)
--[u|w|c|o], --[unknown,warning,critical,ok] <expression>
+-u|w|c|o, --unknown,warning,critical,ok <expression>
    operator is perl operators, e.g.
       '== n'	- numerically equal
       '< n'	- numerically equal
@@ -163,7 +184,11 @@ Options:
       '=~ /s/	- pattern matching
 -s, --state [u|UNKNOWN|w|WARNING|c|CRITICAL|o|OK]
    which state the plugin should become if the expression is true
--y, --type [VALUE,DELTA,ARRAY]
+   default: CRITICAL
+-f, --false [u|UNKNOWN|w|WARNING|c|CRITICAL|o|OK]
+   which state the plugin should become if the expression is false
+   default: complement of state
+-y, --type [SCALAR,ARRAY,DELTA]
    type of data value
 -n, --name
    plugin name (shown in output), default: $opt{name}
@@ -345,7 +370,7 @@ sub parse_commands {
 #--- execute $command, return result in %cmds 
 #---
 sub exec_command {
-	my ($cmd)=@_;
+	my ($no)=@_;
 	my $tmp_stdout="";
 	my $tmp_stderr="";
 
@@ -359,22 +384,22 @@ sub exec_command {
 		$tmp_stderr=&get_tmpfile("/tmp", "${MYSELF}_stderr_$$");
 
 		#--- execute command and store stdout/stderr/return code
-		`$command 1>$tmp_stdout 2>$tmp_stderr`;
-		$cmds{no}{rc}=$? >> 8;
+		`$cmds{$no}{command} 1>$tmp_stdout 2>$tmp_stderr`;
+		$cmds{$no}{rc}=$? >> 8;
 
 		#--- store stdout/stderr and cleanup tmpfiles
-		$cmds{no}{output}=readfile($tmp_stdout);
-		$cmds{no}{stderr}=readfile($tmp_stderr);
+		$cmds{$no}{output}=readfile($tmp_stdout);
+		$cmds{$no}{stderr}=readfile($tmp_stderr);
 		unlink $tmp_stdout, $tmp_stderr;
 
 		#--- unknown return code? change it explicitly to UNKNOWN
-		if (! $cmds{no}{rc} > $UNKNOWN) {
-			$cmds{no}{stderr}.=" RC was $cmds{no}{rc}!";
-			$cmds{no}{rc}=$UNKNOWN;
+		if (! $cmds{$no}{rc} > $UNKNOWN) {
+			$cmds{$no}{stderr}.=" RC was $cmds{no}{rc}!";
+			$cmds{$no}{rc}=$UNKNOWN;
 		}
 		
 		#--- remove white chars from output
-		$cmds{no}{output}=mytrim($cmds{no}{output},"\\n\\s");
+		$cmds{$no}{output}=mytrim($cmds{$no}{output},"\\n\\s");
 
 		alarm(0);
 	};
@@ -383,8 +408,8 @@ sub exec_command {
 	if ($@) {
 		#--- timeout encountered: store status
 		if ($@ =~ /timeout/) {
-			$cmds{no}{output}="UNKNOWN - \'$command\' cancelled after timeout ($opt{timeout}s)";
-			$cmds{no}{rc}=$UNKNOWN;
+			$cmds{$no}{output}="UNKNOWN - \'$command\' cancelled after timeout ($opt{timeout}s)";
+			$cmds{$no}{rc}=$UNKNOWN;
 		#--- catchall for unknown errors
 		} else {
 			alarm(0);
@@ -392,7 +417,7 @@ sub exec_command {
 		}
 		unlink $tmp_stdout, $tmp_stderr;
 	}
-	return $cmds{no}{rc};
+	return $cmds{$no}{rc};
 }
 
 #---
@@ -455,6 +480,33 @@ sub do_report {
 	print "\n";
 }
 
+#---
+#--- analyze results stored in %cmds
+#---
+sub do_analysis {
+        my ($no)=@_;
+	my $returncode=-1;
+
+	#--- first: check return code
+	if ($cmds{$no}{rc} != 0) {
+		print "$opt{name} UNKNOWN - cmd $cmds{$no}{command}: $cmds{$no}{output} [$cmds{$no}{stderr}]\n";
+		return $UNKNOWN;
+	}
+
+	foreach my $severity ("ok","unknown","warning","critical") {
+		if ($opt{$severity}) {
+			$cmds{$no}{condition}=$opt{$severity};
+			print "DEBUG eval $cmds{$no}{output} <-> $opt{$severity}\n";
+			if (eval("\"$cmds{$no}{output}\"$opt{$severity}")) {
+				$returncode=$rc{number}{$severity};
+			} else {
+				$returncode=$rc{complement}{$rc{number}{$severity}};
+			}
+			print "DEBUG rc:$returncode $cmds{$no}{output}$opt{$severity}\n";
+		}
+	}
+	return $returncode;
+}
 #-------------------------------------------------------------------------------
 #--- main ----------------------------------------------------------------------
 #-------------------------------------------------------------------------------
@@ -466,18 +518,23 @@ exit $UNKNOWN if (&process_parameters != $OK);
 $rc{starttime}=time;
 $rc{endtime}=$rc{starttime} + $opt{TIMEOUT};
 
-$no=0;
-foreach ($opt{execute}) {
+#--- fetch command
+$no=1;
+$cmds{$no}{command}=$opt{execute};
+$cmds{$no}{name}=$opt{execute};
 
-	#--- fetch command
-	$cmds{++$no}{command}=$_;
-
-	#--- execute command
-	&exec_command($no);
-}
+#--- execute command
+&exec_command($no);
 
 #--- report results
-&do_report;
+$rc{rc}=&do_analysis($no);
+printf "%s %s - output:>%s< condition:>%s<\n",$opt{name},$rc{label}{$rc{rc}},$cmds{$no}{output},$cmds{$no}{condition};
+print " command: $cmds{$no}{command}\n";
+print "      ok: $opt{ok}\n" if ($opt{ok});
+print " unknown: $opt{unknown}\n" if ($opt{unknown});
+print " warning: $opt{warning}\n" if ($opt{warning});
+print "critical: $opt{critical}\n" if ($opt{critical});
+print "  output: $cmds{$no}{output}\n";
 
 #--- return rc with highest severity
-exit $rc{top};
+exit $rc{rc};
