@@ -59,7 +59,8 @@ $no=0;
 %rc=(
 	label	=> { $OK => "OK", $WARNING => "WARNING", $CRITICAL => "CRITICAL", $UNKNOWN => "UNKNOWN", },
 	number	=> { "OK" => $OK, "WARNING" => $WARNING, "CRITICAL" => $CRITICAL, "UNKNOWN" => $UNKNOWN, 
-	             "ok" => $OK, "warning" => $WARNING, "critical" => $CRITICAL, "unknown" => $UNKNOWN, },
+                     "ok" => $OK, "warning" => $WARNING, "critical" => $CRITICAL, "unknown" => $UNKNOWN,
+                      "o" => $OK,  "w"      => $WARNING, "c"        => $CRITICAL, "u"       => $UNKNOWN, },
 	s2r	=> { 0 => $OK, 2 => $WARNING, 3 => $CRITICAL, 1 => $UNKNOWN, },
 	r2s	=> { $OK => 0, $WARNING => 2, $CRITICAL => 3, $UNKNOWN => 1, },
 	complement => { $OK => $CRITICAL, $WARNING => $OK, $CRITICAL => $OK, $UNKNOWN => $OK, },
@@ -141,7 +142,8 @@ sub process_parameters {
 		print "$MYSELF error: unknown state $opt{state}, should be u|UNKNOWN w|WARNING c|critical o|OK\n";
                 short_usage();
                 return $UNKNOWN;
-	} else {
+	} 
+	if (!$opt{state}) {
 		$opt{state}=$rc{label}{$CRITICAL};
 	}
 	if ($opt{false} && (
@@ -152,8 +154,9 @@ sub process_parameters {
 		print "$MYSELF error: unknown false $opt{false}, should be u|UNKNOWN w|WARNING c|critical o|OK\n";
                 short_usage();
                 return $UNKNOWN;
-	} else {
-		$opt{false}=($opt{state}) ? $rc{complement}{$opt{state}} : "UNKNOWN";
+	}
+	if (!$opt{false}) {
+		$opt{false}=($opt{state}) ? $rc{label}{$rc{complement}{$rc{number}{$opt{state}}}} : $rc{label}{$UNKNOWN};
 	}
 	return $OK;
 }
@@ -176,12 +179,12 @@ Options:
    (can be a complete filter chain)
 -u|w|c|o, --unknown,warning,critical,ok <expression>
    operator is perl operators, e.g.
-      '== n'	- numerically equal
+      '= n'	- numerically equal
       '< n'	- numerically equal
       '> n'	- numerically equal
       'eq s'	- string equal
       'ne s'	- string non equal
-      '=~ /s/	- pattern matching
+      '=~/s/	- pattern matching
 -s, --state [u|UNKNOWN|w|WARNING|c|CRITICAL|o|OK]
    which state the plugin should become if the expression is true
    default: CRITICAL
@@ -485,6 +488,7 @@ sub do_report {
 #---
 sub do_analysis {
         my ($no)=@_;
+	print "DEBUG state $opt{state} false $opt{false} ($rc{number}{$opt{false}})\n";
 	my $returncode=$rc{number}{$opt{false}};
 
 	#--- first: check return code
@@ -493,6 +497,7 @@ sub do_analysis {
 		return $UNKNOWN;
 	}
 
+	$cmds{$no}{condition}="none";
 	foreach my $severity ("ok","unknown","warning","critical") {
 		if ($opt{$severity}) {
 			print "DEBUG eval $cmds{$no}{output} <-> $opt{$severity}\n";
@@ -526,7 +531,7 @@ $cmds{$no}{name}=$opt{execute};
 
 #--- report results
 $rc{rc}=&do_analysis($no);
-printf "%s %s - output:>%s< condition:>%s<\n",$opt{name},$rc{label}{$rc{rc}},$cmds{$no}{output},$cmds{$no}{condition};
+printf "%s %s - output:%s, matched:%s\n",$opt{name},$rc{label}{$rc{rc}},$cmds{$no}{output},$cmds{$no}{condition};
 print " command: $cmds{$no}{command}\n";
 print "      ok: $opt{ok}\n" if ($opt{ok});
 print " unknown: $opt{unknown}\n" if ($opt{unknown});
