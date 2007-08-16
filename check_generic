@@ -102,6 +102,7 @@ sub process_parameters {
 		"t|timeout=i"	=> \$opt{timeout},
 		"u|unknown=s"	=> \$opt{unknown},
 		"x|execute=s"	=> \$opt{execute},
+		"v|verbose"	=> \$opt{execute},
 		"V|version"	=> \$opt{version},
 		"w|warning=s"	=> \$opt{warning},)
 	) {
@@ -124,15 +125,15 @@ sub process_parameters {
         	return $UNKNOWN;
 	}
 	if (!$opt{ok} && !$opt{warning} && !$opt{critical} && !$opt{unknown}) {
-        	print "$MYSELF error: no expression (to compare result) specified\n";
+        	print "$MYSELF error: no comparison expression specified\n";
 		short_usage();
         	return $UNKNOWN;
 	} else {
-		print "DEBUG: $opt{ok} " if ($opt{ok});
-		print "DEBUG: $opt{unknown} " if ($opt{unknown});
-		print "DEBUG: $opt{warning} " if ($opt{warning});
-		print "DEBUG: $opt{critical} " if ($opt{critical});
-		print "\n";
+		#print "DEBUG:opt{ok}: $opt{ok} " if ($opt{ok});
+		#print "DEBUG:opt{unknown}: $opt{unknown} " if ($opt{unknown});
+		#print "DEBUG:opt{warning}: $opt{warning} " if ($opt{warning});
+		#print "DEBUG:opt{critical}: $opt{critical} " if ($opt{critical});
+		#print "\n";
 	}
 	if ($opt{state} && (
 		$opt{state} ne "o" && $opt{state} ne "OK" &&
@@ -197,6 +198,8 @@ Options:
    plugin name (shown in output), default: $opt{name}
 -t, --timeout
    timeout for one command, default: $opt{timeout}
+-v, --verbose
+   increase verbosity (can be called multiple)
 -h, --help
    print detailed help screen
 -V, --version
@@ -394,15 +397,19 @@ sub exec_command {
 		$cmds{$no}{output}=readfile($tmp_stdout);
 		$cmds{$no}{stderr}=readfile($tmp_stderr);
 		unlink $tmp_stdout, $tmp_stderr;
+		#print "DEBUG output:>$cmds{$no}{output}< stderr:>$cmds{$no}{stderr}<n";
 
 		#--- unknown return code? change it explicitly to UNKNOWN
-		if (! $cmds{$no}{rc} > $UNKNOWN) {
+		if (!defined($rc{r2s}{$cmds{$no}{rc}})) {
 			$cmds{$no}{stderr}.=" RC was $cmds{no}{rc}!";
 			$cmds{$no}{rc}=$UNKNOWN;
 		}
 		
 		#--- remove white chars from output
-		$cmds{$no}{output}=mytrim($cmds{$no}{output},"\\n\\s");
+		#$cmds{$no}{output}=mytrim($cmds{$no}{output},"\\n\\s");
+		#$cmds{$no}{stderr}=mytrim($cmds{$no}{stderr},"\\n\\s");
+
+		#print "DEBUG output:>$cmds{$no}{output}< stderr:>$cmds{$no}{stderr}<n";
 
 		alarm(0);
 	};
@@ -488,7 +495,7 @@ sub do_report {
 #---
 sub do_analysis {
    my ($no)=@_;
-	print "DEBUG state $opt{state} false $opt{false} ($rc{number}{$opt{false}})\n";
+	#print "DEBUG state $opt{state} false $opt{false} ($rc{number}{$opt{false}})\n";
 	my $returncode=$rc{number}{$opt{false}};
 
 	#--- first: check return code
@@ -497,15 +504,15 @@ sub do_analysis {
 		return $UNKNOWN;
 	}
 
-	$cmds{$no}{condition}="none";
+	$cmds{$no}{match}="none";
 	foreach my $severity ("ok","unknown","warning","critical") {
-		if ($opt{$severity}) {
-			print "DEBUG eval $cmds{$no}{output} <-> $opt{$severity}\n";
-			if (eval("\"$cmds{$no}{output}\"$opt{$severity}")) {
-				$cmds{$no}{condition}=$opt{$severity};
+		if (defined($opt{$severity})) {
+			#print "DEBUG eval $cmds{$no}{output} <-> $opt{$severity}\n";
+			if (eval("\'$cmds{$no}{output}\'$opt{$severity}")) {
+				$cmds{$no}{match}=$opt{$severity};
 				$returncode=$rc{number}{$severity};
 			}
-			print "DEBUG rc:$returncode $cmds{$no}{output}$opt{$severity}\n";
+			#print "DEBUG rc:$returncode $cmds{$no}{output}$opt{$severity}\n";
 		}
 	}
 	return $returncode;
@@ -531,13 +538,17 @@ $cmds{$no}{name}=$opt{execute};
 
 #--- report results
 $rc{rc}=&do_analysis($no);
-printf "%s %s - output:%s, matched:%s\n",$opt{name},$rc{label}{$rc{rc}},$cmds{$no}{output},$cmds{$no}{condition};
-print " command: $cmds{$no}{command}\n";
-print "      ok: $opt{ok}\n" if ($opt{ok});
-print " unknown: $opt{unknown}\n" if ($opt{unknown});
-print " warning: $opt{warning}\n" if ($opt{warning});
-print "critical: $opt{critical}\n" if ($opt{critical});
-print "  output: $cmds{$no}{output}\n";
+printf "%s %s - output:%s, matched:%s\n",
+	$opt{name},
+	$rc{label}{$rc{rc}},
+	substr(mytrim($cmds{$no}{output},"\\n\\s"),0,20),
+	$cmds{$no}{match};
+#print " command: $cmds{$no}{command}\n";
+#print "      ok: $opt{ok}\n" if ($opt{ok});
+#print " unknown: $opt{unknown}\n" if ($opt{unknown});
+#print " warning: $opt{warning}\n" if ($opt{warning});
+#print "critical: $opt{critical}\n" if ($opt{critical});
+#print "  output: $cmds{$no}{output}\n";
 
 #--- return rc with highest severity
 exit $rc{rc};
