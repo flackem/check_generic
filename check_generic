@@ -67,6 +67,7 @@ $no=0;
 	minimum => { $OK => 0, $WARNING => 1, $CRITICAL => 1, $UNKNOWN => 1, },
 	maximum => { $OK => 0, $WARNING => 1, $CRITICAL => 1, $UNKNOWN => 1, },
 	list	=> { $OK => [],$WARNING => [],$CRITICAL => [],$UNKNOWN => [], },
+	textsev	=> ["ok","unknown","warning","critical"],
 	top	=> $OK,
 	error	=> [ ],
 	starttime => 0.0,
@@ -135,18 +136,6 @@ sub process_parameters {
 		#print "DEBUG:opt{critical}: $opt{critical} " if ($opt{critical});
 		#print "\n";
 	}
-	if ($opt{state} && (
-		$opt{state} ne "o" && $opt{state} ne "OK" &&
-		$opt{state} ne "u" && $opt{state} ne "UNKNOWN" &&
-		$opt{state} ne "w" && $opt{state} ne "WARNING" &&
-		$opt{state} ne "c" && $opt{state} ne "CRITICAL")) {
-		print "$MYSELF error: unknown state $opt{state}, should be u|UNKNOWN w|WARNING c|critical o|OK\n";
-                short_usage();
-                return $UNKNOWN;
-	} 
-	if (!$opt{state}) {
-		$opt{state}=$rc{label}{$CRITICAL};
-	}
 	if ($opt{false} && (
 		$opt{false} ne "o" && $opt{false} ne "OK" &&
 		$opt{false} ne "u" && $opt{false} ne "UNKNOWN" &&
@@ -156,8 +145,14 @@ sub process_parameters {
                 short_usage();
                 return $UNKNOWN;
 	}
-	if (!$opt{false}) {
-		$opt{false}=($opt{state}) ? $rc{label}{$rc{complement}{$rc{number}{$opt{state}}}} : $rc{label}{$UNKNOWN};
+	while (!defined($opt{false})) {
+		foreach my $state (reverse @{$rc{textsev}}) {
+			#print "DEBUG:state:$state opt{state}:$opt{$state}\n";
+			if (defined($opt{$state})) {
+				$opt{false}=$rc{label}{$rc{complement}{$rc{number}{$state}}};
+				last;
+			}
+		}
 	}
 	return $OK;
 }
@@ -186,8 +181,6 @@ Options:
       'eq s'	- string equal
       'ne s'	- string non equal
       '=~/s/	- pattern matching
--s, --state [u|UNKNOWN|w|WARNING|c|CRITICAL|o|OK]
-   which state the plugin should become if the expression is true
    default: CRITICAL
 -f, --false [u|UNKNOWN|w|WARNING|c|CRITICAL|o|OK]
    which state the plugin should become if the expression is false
@@ -206,6 +199,8 @@ Options:
    print version information
 LONGEOF
 
+#-s, --state [u|UNKNOWN|w|WARNING|c|CRITICAL|o|OK]
+#   which state the plugin should become if the expression is true
 #-r, --report <level>
 #  specify level of details in output (level is binary coded, just add all options)
 #   default: $opt{report}
@@ -494,8 +489,8 @@ sub do_report {
 #--- analyze results stored in %cmds
 #---
 sub do_analysis {
-   my ($no)=@_;
-	#print "DEBUG state $opt{state} false $opt{false} ($rc{number}{$opt{false}})\n";
+	my ($no)=@_;
+	#print "DEBUG state:$opt{state} false:$opt{false} number{false}:($rc{number}{$opt{false}})\n";
 	my $returncode=$rc{number}{$opt{false}};
 
 	#--- first: check return code
@@ -504,8 +499,8 @@ sub do_analysis {
 		return $UNKNOWN;
 	}
 
-	$cmds{$no}{match}="none";
-	foreach my $severity ("ok","unknown","warning","critical") {
+	$cmds{$no}{match}="no";
+	foreach my $severity (@{$rc{textsev}}) {
 		if (defined($opt{$severity})) {
 			#print "DEBUG eval $cmds{$no}{output} <-> $opt{$severity}\n";
 			if (eval("\'$cmds{$no}{output}\'$opt{$severity}")) {
@@ -541,7 +536,7 @@ $rc{rc}=&do_analysis($no);
 printf "%s %s - output:%s, matched:%s\n",
 	$opt{name},
 	$rc{label}{$rc{rc}},
-	substr(mytrim($cmds{$no}{output},"\\n\\s"),0,20),
+	substr(mytrim($cmds{$no}{output},"\\n\\s"),0,80),
 	$cmds{$no}{match};
 #print " command: $cmds{$no}{command}\n";
 #print "      ok: $opt{ok}\n" if ($opt{ok});
