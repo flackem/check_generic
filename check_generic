@@ -31,9 +31,11 @@ use strict;
 use Getopt::Long qw(:config no_ignore_case bundling);
 BEGIN { eval("use Time::HiRes qw(time)") }
 use lib "/usr/local/nagios/libexec";
-use vars qw($MYSELF %opt %cmds %rc $command $returncode $no $VERSION
- $OK $WARNING $CRITICAL $UNKNOWN $DETAIL_LIST $DETAIL_RC $DETAIL_STDERR
- $DETAIL_PERFORMANCE);
+use vars qw(
+$MYSELF %opt %cmds %rc $command $returncode $no
+$VERSION $OK $WARNING $CRITICAL $UNKNOWN 
+$DETAIL_LIST $DETAIL_RC $DETAIL_STDERR $DETAIL_PERFORMANCE
+);
 
 #-------------------------------------------------------------------------------
 #--- vars ----------------------------------------------------------------------
@@ -82,6 +84,7 @@ my %opt=(
 	"timeout"	=> 10,
 	"TIMEOUT"	=> 60,
 	"verbose"	=> 0,
+	"string"	=> {},
 	#"ok"		=> "0:0",
 	#"warning"	=> "1:1",
 	#"critical"	=> "1:1",
@@ -131,10 +134,14 @@ sub process_parameters {
 		short_usage();
         	return $UNKNOWN;
 	} else {
-		debug(2, "process_parameters: opt{ok}: $opt{ok}") if ($opt{ok});
-		debug(2, "process_parameters: opt{unknown}: $opt{unknown}") if ($opt{unknown});
-		debug(2, "process_parameters: opt{warning}: $opt{warning}") if ($opt{warning});
-		debug(2, "process_parameters: opt{critical}: $opt{critical}") if ($opt{critical});
+		foreach my $state (reverse @{$rc{textsev}}) {
+			if (defined($opt{$state})) {
+				$opt{string}{$state}=is_string_cmp($opt{$state});
+				debug(3,"process_parameters: state $state defined:$opt{$state}, text comparison:$opt{string}{$state}");
+			} else {
+				debug(3,"process_parameters: state $state not defined");
+			}
+		}
 	}
 	if ($opt{false} && (
 		$opt{false} ne "o" && $opt{false} ne "OK" &&
@@ -154,7 +161,7 @@ sub process_parameters {
 			}
 		}
 	}
-	#print "DEBUG verbose:$opt{verbose}\n" if (defined($opt{verbose}));
+	debug(2, "verbosity:$opt{verbose}");
 	return $OK;
 }
 
@@ -213,17 +220,44 @@ LONGEOF
 #      8: show performance data
 }
 
+#---
+#--- debug output routine
+#---
 sub debug {
 	my ($level,$message)=@_;
-	if ($level >= $opt{verbose}) {
-		print "$message\n";
-	}
+	print "$message\n" if ($level <= $opt{verbose});
 }
 
 #---
-#--- numerical sort
+#--- read file and return its contents
 #---
-sub numerically { $a <=> $b }
+sub readfile {
+        my ($filename)=@_;
+        open(FILE,$filename) || add_error("readfile: error opening $filename:$!") && return "";
+        my @lines=<FILE>;
+        close(FILE);
+        return join("", @lines);
+}
+
+#---
+#--- check if expression is string comparison
+#---
+sub is_string_cmp {
+	my $expression=shift;
+	my %stringop=('lt','gt','le','ge','=~','!~','eq','ne');
+	foreach my $key (keys(%stringop)) {
+		return 1 if ($expression=~/^\s*$key/);
+	}
+	return 0;
+}
+
+#---
+#--- taken from Perl Cookbook ;-)
+#---
+sub is_valid_pattern {
+    my $pat = shift;
+    return eval { "" =~ /$pat/; 1 } || 0;
+}
 
 #---
 #--- trim input string if found any chars from trim string
@@ -249,51 +283,6 @@ sub substitute_macros {
 #---
 sub add_error {
 	push @{$rc{error}}, @_;
-}
-
-#---
-#--- minmax parses threshold string of format 'min:max'
-#--- also allowed: 'min:' ':max' 'max'
-#--- input values: thresholdstring, absolute minimum, absolute maximum
-#--- return values: ($min,$max)
-#---
-sub minmax {
-	my ($input,$absmin,$absmax)=@_;
-	my $stripped;
-	my $min;
-	my $max;
-
-	# in any case: strip white chars
-	($stripped=$input)=~s/\s+//;
-
-	debug(2, "minmax input:>$input< stripped:>$stripped< absmin:$absmin absmax:$absmax\n");
-
-	# bare number without ':'
-	if ($stripped=~/^(\d+)$/) {
-		$min=$absmin;
-		$max=$1;
-	# number:
-	} elsif ($stripped=~/^(\d+):$/) {
-		$min=$1;
-		$max=$absmax;
-	# :number
-	} elsif ($stripped=~/^:(\d+)$/) {
-		$min=$absmin;
-		$max=$1;
-	# number:number
-	} elsif ($stripped=~/^(\d+):(\d+)$/) {
-		$min=$1;
-		$max=$2;
-	# format error
-	} else {
-		add_error("minmax: format ERROR in input string '$input'");
-	}
-	
-	if ($min > $max) {
-		add_error("minmax: ERROR min $min > max $max");
-	}
-	
-	return ($min,$max);
 }
 
 #---
@@ -323,59 +312,6 @@ sub get_tmpfile {
 }
 
 #---
-#--- read file and return its contents
-#---
-sub readfile {
-	my ($filename)=@_;
-	open(FILE,$filename) || add_error("readfile: error opening $filename:$!") && return "";
-	my @lines=<FILE>;
-	close(FILE);
-	return join("", @lines);
-}
-
-#---
-#--- parse command file and fill %cmds structure
-#---
-sub parse_commands {
-	my ($filename)=@_;
-	my $lineno=0;		# count sourcefile lines
-	my $cmd_count=0;	# count stored commands
-	my ($cmd,$name,$plugin);
-
-	if (!open(FILE, $filename)) {
-		add_error("parse_command: cannot open config file $filename:$!");
-		$rc{top}=$UNKNOWN;
-		return $cmd_count;
-	}
-
-	while (<FILE>) {
-		$lineno++;		
-		next if (/^\s*$/);	# skip empty lines
-		next if (/^\s*#/);	# skip comments
-	
-		chop($cmd=$_);
-		$cmd=substitute_macros($cmd);
-
-		#--- format: 'command[ tag ] = plugin command line'
-		if ($cmd=~/\s*command\s*\[\s*(\S+)\s*\]\s*=\s*(.*)\s*/i) {
-			$name=$1;
-			$cmd=$2;
-			$plugin=(split(/\s+/,"$cmd"))[0];
-		} else {
-			add_error("parse_command: invalid format in line $lineno: $cmd");
-			next;
-		}
-
-		#--- store vars into cmds structure
-		$cmds{++$cmd_count}{command}=$cmd;
-		$cmds{$cmd_count}{plugin}=$plugin;
-		$cmds{$cmd_count}{name}=$name;
-	}
-	close FILE;
-	return $cmd_count;
-}
-
-#---
 #--- execute $command, return result in %cmds 
 #---
 sub exec_command {
@@ -400,7 +336,7 @@ sub exec_command {
 		$cmds{$no}{output}=readfile($tmp_stdout);
 		$cmds{$no}{stderr}=readfile($tmp_stderr);
 		unlink $tmp_stdout, $tmp_stderr;
-		debug(1, "exec_command: output:>$cmds{$no}{output}< stderr:>$cmds{$no}{stderr}<n");
+		#debug(1, "exec_command: output:>$cmds{$no}{output}< stderr:>$cmds{$no}{stderr}<n");
 
 		#--- unknown return code? change it explicitly to UNKNOWN
 		if (!defined($rc{r2s}{$cmds{$no}{rc}})) {
@@ -426,7 +362,7 @@ sub exec_command {
 		#--- catchall for unknown errors
 		} else {
 			alarm(0);
-       			die "$MYSELF: unexpected exception encountered:$!";
+       			die "$MYSELF: unexpected exception encountered:$@";
 		}
 		unlink $tmp_stdout, $tmp_stderr;
 	}
@@ -434,71 +370,11 @@ sub exec_command {
 }
 
 #---
-#--- report results stored in %cmds
-#---
-sub do_report {
-
-	#--- do some statistics
-	foreach $no (sort numerically keys %cmds) {
-
-		$rc{count}{$cmds{$no}{rc}}++;	# count return codes
-		push @{$rc{list}{$cmds{$no}{rc}}},$cmds{$no}{name}; # add plugin to list
-		#print STDERR "DEBUG: rc:$cmds{$no}{rc} ok:$rc{count}{$OK} unknown:$rc{count}{$UNKNOWN} warning:$rc{count}{$WARNING} critical:$rc{count}{$CRITICAL}\n";
-
-		#--- determine return code with highest severity
-		#print STDERR "DEBUG: r2s-rc:$rc{r2s}{$cmds{$no}{rc}} top:$rc{r2s}{$rc{top}} rc:$cmds{$no}{rc}\n";
-		$rc{top}=$cmds{$no}{rc} if ($rc{r2s}{$cmds{$no}{rc}} > $rc{r2s}{$rc{top}});
-	}
-
-	#--- print header line (1): name, state, number of plugins
-	print "$opt{name} $rc{label}{$rc{top}} - " . keys(%cmds) . " plugins checked, ";
-
-	#--- print header line (2): summary for particular states 
-	if ($opt{report} & $DETAIL_LIST) {
-		print	"$rc{count}{$CRITICAL} critical (" . join(',',@{$rc{list}{$CRITICAL}}) . "), " .
-			"$rc{count}{$WARNING} warning (" . join(',',@{$rc{list}{$WARNING}}) . "), " .
-			"$rc{count}{$UNKNOWN} unknown (" . join(',',@{$rc{list}{$UNKNOWN}}) . "), " .
-			"$rc{count}{$OK} ok";
-	} else {
-		print	"$rc{count}{$CRITICAL} critical, " .
-			"$rc{count}{$WARNING} warning, " .
-			"$rc{count}{$UNKNOWN} unknown, " .
-			"$rc{count}{$OK} ok";
-	}
-
-	#--- print general errors if any occured
-	print " [" . join(",",@{$rc{error}}) . "]" if (defined($rc{error}[0]));
-	
-
-	#--- loop over commands: report particular results for long plugin output
-	foreach $no (sort numerically keys %cmds) {
-
-		printf "\n[%2.d] %s%s - %s%s",
-			$no,
-			($opt{report} & $DETAIL_RC) ? substr($rc{label}{$cmds{$no}{rc}},0,10) . ' ' : "",
-			$cmds{$no}{name},
-			$cmds{$no}{output},
-			(defined($cmds{$no}{stderr}) && $cmds{$no}{stderr} ne "" && $opt{report} & $DETAIL_STDERR) ?
-			 " [ STDERR: " . $cmds{$no}{stderr} . ']' : "";
-	}
-
-	#--- report performance data?
-	if ($opt{report} & $DETAIL_PERFORMANCE) {
-		printf "\|$opt{name}:$MYSELF:plugins=%d time=%.2f \n", scalar(keys(%cmds)), time - $rc{starttime};
-		#--- one line per command, format: tag=output
-		foreach $no (sort numerically keys %cmds) {
-			print "$cmds{$no}{name}:$cmds{$no}{plugin}:$cmds{$no}{performance} \n" if (defined($cmds{$no}{performance}));
-		}
-	}
-	print "\n";
-}
-
-#---
 #--- analyze results stored in %cmds
 #---
 sub do_analysis {
 	my ($no)=@_;
-	debug(1,"do_analysis: state:$opt{state} false:$opt{false} number{false}:($rc{number}{$opt{false}})");
+	#debug(2,"do_analysis: state:$opt{state} false:$opt{false} number{false}:($rc{number}{$opt{false}})");
 	my $returncode=$rc{number}{$opt{false}};
 
 	#--- first: check return code
@@ -510,12 +386,14 @@ sub do_analysis {
 	$cmds{$no}{match}="no";
 	foreach my $severity (@{$rc{textsev}}) {
 		if (defined($opt{$severity})) {
-			debug(1,"do_analysis: compare $cmds{$no}{output} <-> $opt{$severity}");
+			debug(2,"do_analysis: compare \'$cmds{$no}{output}\' <-> \'$opt{$severity}\'");
 			if (eval("\'$cmds{$no}{output}\'$opt{$severity}")) {
 				$cmds{$no}{match}=$opt{$severity};
 				$returncode=$rc{number}{$severity};
+				debug(2,"do_analysis: eval successful rc:$returncode match:\'$cmds{$no}{match}\'");
+			} else {
+				debug(2,"do_analysis: eval *not* successful rc:$returncode expression:\'$cmds{$no}{output}\'$opt{$severity}");
 			}
-			debug(1,"do_analysis: rc:$returncode $cmds{$no}{output}$opt{$severity}");
 		}
 	}
 	return $returncode;
@@ -546,12 +424,6 @@ printf "%s %s - output:%s, matched:%s\n",
 	$rc{label}{$rc{rc}},
 	substr(mytrim($cmds{$no}{output},"\\n\\s"),0,80),
 	$cmds{$no}{match};
-#print " command: $cmds{$no}{command}\n";
-#print "      ok: $opt{ok}\n" if ($opt{ok});
-#print " unknown: $opt{unknown}\n" if ($opt{unknown});
-#print " warning: $opt{warning}\n" if ($opt{warning});
-#print "critical: $opt{critical}\n" if ($opt{critical});
-#print "  output: $cmds{$no}{output}\n";
 
 #--- return rc with highest severity
 exit $rc{rc};
