@@ -85,6 +85,8 @@ my %opt=(
 	"TIMEOUT"	=> 60,
 	"verbose"	=> 0,
 	"string"	=> {},
+	"type"		=> "scalar",
+	"tmpdir"	=> "/usr/tmp",
 	#"ok"		=> "0:0",
 	#"warning"	=> "1:1",
 	#"critical"	=> "1:1",
@@ -99,6 +101,7 @@ sub process_parameters {
 
 	if (! GetOptions(
 		"c|critical=s"	=> \$opt{critical},
+		"d|tmpdir=s"	=> \$opt{tmpdir},
 		"e|execute=s"	=> \$opt{execute},
 		"h|help"	=> \$opt{help},
 		"n|name=s"	=> \$opt{name},
@@ -109,7 +112,9 @@ sub process_parameters {
 		"u|unknown=s"	=> \$opt{unknown},
 		"v|verbose+"	=> \$opt{verbose},
 		"V|version"	=> \$opt{version},
-		"w|warning=s"	=> \$opt{warning},)
+		"w|warning=s"	=> \$opt{warning},
+		"y|type=s"	=> \$opt{type},
+		)
 	) {
 		short_usage();
         	return $UNKNOWN;
@@ -161,6 +166,23 @@ sub process_parameters {
 			}
 		}
 	}
+	if ($opt{type} eq "delta") {
+		#--- create tmpfile name from 1. tag 2. command 3. expressions
+		$opt{tmpfile}=$opt{name} . "_" . $opt{execute};
+		foreach my $state (reverse @{$rc{textsev}}) {
+			$opt{tmpfile} .= '_' . $opt{$state} if (defined($opt{$state}));
+		}
+		$opt{tmpfile}=~s/\W/_/g;
+		$opt{tmpfile}="$MYSELF.$opt{tmpfile}.tmp";
+		debug(2, "process_parameter: tmpfile:$opt{tmpfile}");
+		
+		#--- read content of old tmpfile if available
+		my $content=readfile($opt{tmpfile});
+		if ($content ne "") {
+			($cmds{$no}{old_timestamp},$cmds{$no}{old_output})=split(/\s+/,$content);
+			debug(2, "process_parameter: old_timestamp:$cmds{$no}{old_timestamp} old_output:$cmds{$no}{old_output}");
+		}
+	}
 	debug(2, "verbosity:$opt{verbose}");
 	return $OK;
 }
@@ -199,8 +221,10 @@ Options:
    plugin name (shown in output), default: $opt{name}
 -t, --timeout
    timeout for one command, default: $opt{timeout}
+-d, --tmpdir
+   specify directory for tmpfiles, default: $opt{tmpdir}
 -v, --verbose
-   increase verbosity (can be called multiple)
+   increase verbosity (can be called multiple), default: $opt{verbose}
 -h, --help
    print detailed help screen
 -V, --version
@@ -240,11 +264,22 @@ sub readfile {
 }
 
 #---
+#--- write to file
+#---
+sub writefile {
+        my ($filename, $content)=@_;
+        open(FILE,">$filename") || add_error("writefile: error opening $filename:$!") && return 0;
+        print FILE $content;
+        close(FILE);
+	return -s $filename;
+}
+
+#---
 #--- check if expression is string comparison
 #---
 sub is_string_cmp {
 	my $expression=shift;
-	my %stringop=('lt','gt','le','ge','=~','!~','eq','ne');
+	my %stringop=('lt','gt','le','ge','\=\~','\!\~','eq','ne');
 	foreach my $key (keys(%stringop)) {
 		return 1 if ($expression=~/^\s*$key/);
 	}
@@ -331,6 +366,7 @@ sub exec_command {
 		#--- execute command and store stdout/stderr/return code
 		`$cmds{$no}{command} 1>$tmp_stdout 2>$tmp_stderr`;
 		$cmds{$no}{rc}=$? >> 8;
+		$cmds{$no}{timestamp}=time;
 
 		#--- store stdout/stderr and cleanup tmpfiles
 		$cmds{$no}{output}=readfile($tmp_stdout);
@@ -345,8 +381,8 @@ sub exec_command {
 		}
 		
 		#--- remove white chars from output
-		#$cmds{$no}{output}=mytrim($cmds{$no}{output},"\\n\\s");
-		#$cmds{$no}{stderr}=mytrim($cmds{$no}{stderr},"\\n\\s");
+		$cmds{$no}{output}=mytrim($cmds{$no}{output},"\\n\\s");
+		$cmds{$no}{stderr}=mytrim($cmds{$no}{stderr},"\\n\\s");
 
 		#print "DEBUG output:>$cmds{$no}{output}< stderr:>$cmds{$no}{stderr}<n";
 
@@ -383,17 +419,35 @@ sub do_analysis {
 		return $UNKNOWN;
 	}
 
+	#--- check type
+	if ($opt{type} eq "delta") {
+		if (defined($cmds{$no}{old_timestamp}) && $cmds{$no}{old_timestamp} > 0) {
+			$cmds{$no}{elapsed_seconds}=$cmds{$no}{timestamp}-$cmds{$no}{old_timestamp};
+			$cmds{$no}{delta}=$cmds{$no}{output}-$cmds{$no}{old_output};
+			writefile($opt{tmpfile}, "$cmds{$no}{timestamp} $cmds{$no}{output}");
+			debug(2, "do_analysis: elapsed_seconds:$cmds{$no}{elapsed_seconds} delta:$cmds{$no}{delta}");
+			if ($cmds{$no}{elapsed_seconds} > 0) {
+				$cmds{$no}{output}=$cmds{$no}{delta}/$cmds{$no}{elapsed_seconds};
+			}
+		} else {
+			writefile($opt{tmpfile}, "$cmds{$no}{timestamp} $cmds{$no}{output}");
+			print "$opt{name} UNKNOWN - cmd $cmds{$no}{command}: $cmds{$no}{output} [$cmds{$no}{stderr}] no previous output available\n";
+                	return $UNKNOWN;
+		}
+	}
+
 	$cmds{$no}{match}="no";
 	foreach my $severity (@{$rc{textsev}}) {
 		if (defined($opt{$severity})) {
 			debug(2,"do_analysis: compare \'$cmds{$no}{output}\' <-> \'$opt{$severity}\'");
-			if (eval("\'$cmds{$no}{output}\'$opt{$severity}")) {
+			if ($cmds{$no}{result}=eval("\'$cmds{$no}{output}\'$opt{$severity}")) {
 				$cmds{$no}{match}=$opt{$severity};
 				$returncode=$rc{number}{$severity};
 				debug(2,"do_analysis: eval successful rc:$returncode match:\'$cmds{$no}{match}\'");
 			} else {
 				debug(2,"do_analysis: eval *not* successful rc:$returncode expression:\'$cmds{$no}{output}\'$opt{$severity}");
 			}
+			
 		}
 	}
 	return $returncode;
@@ -401,6 +455,9 @@ sub do_analysis {
 #-------------------------------------------------------------------------------
 #--- main ----------------------------------------------------------------------
 #-------------------------------------------------------------------------------
+
+#--- set command no
+$no=1;
 
 #--- parse command line options
 exit $UNKNOWN if (&process_parameters != $OK);
@@ -410,7 +467,6 @@ $rc{starttime}=time;
 $rc{endtime}=$rc{starttime} + $opt{TIMEOUT};
 
 #--- fetch command
-$no=1;
 $cmds{$no}{command}=$opt{execute};
 $cmds{$no}{name}=$opt{execute};
 
@@ -419,10 +475,11 @@ $cmds{$no}{name}=$opt{execute};
 
 #--- report results
 $rc{rc}=&do_analysis($no);
-printf "%s %s - output:%s, matched:%s\n",
+printf "%s %s - result:%s match:%s\n",
 	$opt{name},
 	$rc{label}{$rc{rc}},
-	substr(mytrim($cmds{$no}{output},"\\n\\s"),0,80),
+	#substr(mytrim($cmds{$no}{output},"\\n\\s"),0,80),
+	$cmds{$no}{output},
 	$cmds{$no}{match};
 
 #--- return rc with highest severity
