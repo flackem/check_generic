@@ -106,6 +106,7 @@ sub process_parameters {
 		"h|help"	=> \$opt{help},
 		"n|name=s"	=> \$opt{name},
 		"o|ok=s"	=> \$opt{ok},
+		"p|performance=s" => \$opt{performance},
 		"r|report:i"	=> \$opt{report},
 		"f|false=s"	=> \$opt{false},
 		"t|timeout=i"	=> \$opt{timeout},
@@ -177,7 +178,7 @@ sub process_parameters {
 		debug(2, "process_parameter: tmpfile:$opt{tmpfile}");
 		
 		#--- read content of old tmpfile if available
-		my $content=readfile($opt{tmpfile});
+		my $content=readfile("$opt{tmpdir}/$opt{tmpfile}");
 		if ($content ne "") {
 			($cmds{$no}{old_timestamp},$cmds{$no}{old_output})=split(/\s+/,$content);
 			debug(2, "process_parameter: old_timestamp:$cmds{$no}{old_timestamp} old_output:$cmds{$no}{old_output}");
@@ -424,13 +425,13 @@ sub do_analysis {
 		if (defined($cmds{$no}{old_timestamp}) && $cmds{$no}{old_timestamp} > 0) {
 			$cmds{$no}{elapsed_seconds}=$cmds{$no}{timestamp}-$cmds{$no}{old_timestamp};
 			$cmds{$no}{delta}=$cmds{$no}{output}-$cmds{$no}{old_output};
-			writefile($opt{tmpfile}, "$cmds{$no}{timestamp} $cmds{$no}{output}");
+			writefile("$opt{tmpdir}/$opt{tmpfile}", "$cmds{$no}{timestamp} $cmds{$no}{output}");
 			debug(2, "do_analysis: elapsed_seconds:$cmds{$no}{elapsed_seconds} delta:$cmds{$no}{delta}");
 			if ($cmds{$no}{elapsed_seconds} > 0) {
-				$cmds{$no}{output}=$cmds{$no}{delta}/$cmds{$no}{elapsed_seconds};
+				$cmds{$no}{output}=sprintf "%.2f", $cmds{$no}{delta}/$cmds{$no}{elapsed_seconds};
 			}
 		} else {
-			writefile($opt{tmpfile}, "$cmds{$no}{timestamp} $cmds{$no}{output}");
+			writefile("$opt{tmpdir}/$opt{tmpfile}", "$cmds{$no}{timestamp} $cmds{$no}{output}");
 			print "$opt{name} UNKNOWN - cmd $cmds{$no}{command}: $cmds{$no}{output} [$cmds{$no}{stderr}] no previous output available\n";
                 	return $UNKNOWN;
 		}
@@ -475,12 +476,14 @@ $cmds{$no}{name}=$opt{execute};
 
 #--- report results
 $rc{rc}=&do_analysis($no);
-printf "%s %s - result:%s match:%s\n",
+printf "%s %s - result:%s match:%s",
 	$opt{name},
 	$rc{label}{$rc{rc}},
 	#substr(mytrim($cmds{$no}{output},"\\n\\s"),0,80),
 	$cmds{$no}{output},
 	$cmds{$no}{match};
+printf "|%s=$cmds{$no}{output}", $opt{performance}, $cmds{$no}{output} if ($opt{performance});
+printf "\n";
 
 #--- return rc with highest severity
 exit $rc{rc};
