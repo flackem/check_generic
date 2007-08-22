@@ -1,0 +1,33 @@
+#!/usr/bin/perl
+#
+#
+#
+#
+# todo 
+# - config file definition
+# - plugin definition host list
+# - plugin definition extended_host_info
+# - get default interface
+# - output definition
+#   hosts.machinename.cfg: 
+#		- define host {
+#          host_name $SHORTNAME$
+#          alias $FQDN$
+#          address $IP$
+#          hostgroups list...
+#          use $TEMPLATE$
+#     }
+#   hostgroups.cfg
+#     - define hostgroup {
+#			hostgroup_name $HOSTGROUP$
+#		   alias $HOSTGROUP_ALIAS$
+#		   # members list...
+#	     }
+#
+#
+# program logic
+# foreach host (ask hostlist plugin) {
+# 	get extended_info(ask extended_host_info plugin);
+#  	do_output(ask output plugin);
+#		do_logging(ask logging plugin);
+# }
