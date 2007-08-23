@@ -437,12 +437,19 @@ sub do_analysis {
 		}
 	}
 
+	#--- start with no match
 	$cmds{$no}{match}="no";
+
+	#--- step forward in the order of severity from OK to CRITICAL
 	foreach my $severity (@{$rc{textsev}}) {
+
 		if (defined($opt{$severity})) {
 			debug(2,"do_analysis: compare \'$cmds{$no}{output}\' <-> \'$opt{$severity}\'");
+			#--- can be numerical or string evaluation
 			if ($cmds{$no}{result}=eval("\'$cmds{$no}{output}\'$opt{$severity}")) {
+				$cmds{$no}{test}=$1;
 				$cmds{$no}{match}=$opt{$severity};
+				$cmds{$no}{output}=$1;
 				$returncode=$rc{number}{$severity};
 				debug(2,"do_analysis: eval successful rc:$returncode match:\'$cmds{$no}{match}\'");
 			} else {
@@ -476,12 +483,13 @@ $cmds{$no}{name}=$opt{execute};
 
 #--- report results
 $rc{rc}=&do_analysis($no);
-printf "%s %s - result:%s match:%s",
+printf "%s %s - result:%s match:%s test:%s",
 	$opt{name},
 	$rc{label}{$rc{rc}},
 	#substr(mytrim($cmds{$no}{output},"\\n\\s"),0,80),
 	$cmds{$no}{output},
-	$cmds{$no}{match};
+	$cmds{$no}{match},
+	$cmds{$no}{test};
 printf "|%s=$cmds{$no}{output}", $opt{performance}, $cmds{$no}{output} if ($opt{performance});
 printf "\n";
 
