@@ -32,7 +32,7 @@ use Getopt::Long qw(:config no_ignore_case bundling);
 BEGIN { eval("use Time::HiRes qw(time)") }
 use lib "/usr/local/nagios/libexec";
 use vars qw(
-$MYSELF %opt %cmds %rc $command $returncode $no
+$MYSELF %opt %cmd %rc $command $returncode 
 $VERSION $OK $WARNING $CRITICAL $UNKNOWN 
 $DETAIL_LIST $DETAIL_RC $DETAIL_STDERR $DETAIL_PERFORMANCE
 );
@@ -56,8 +56,7 @@ $DETAIL_STDERR=4;
 $DETAIL_PERFORMANCE=8;
 #
 #--- vars
-$no=0;
-%cmds=();
+%cmd=();
 %rc=(
 	label	=> { $OK => "OK", $WARNING => "WARNING", $CRITICAL => "CRITICAL", $UNKNOWN => "UNKNOWN", },
 	number	=> { "OK" => $OK, "WARNING" => $WARNING, "CRITICAL" => $CRITICAL, "UNKNOWN" => $UNKNOWN, 
@@ -80,13 +79,13 @@ my %opt=(
 	"configfile"	=> "",
 	"libexec"	=> "/usr/local/nagios/libexec",
 	"name"		=> "CHANGEME",
+	"performance"	=> undef,
 	"report"	=> 15,
-	"timeout"	=> 10,
-	"TIMEOUT"	=> 60,
-	"verbose"	=> 0,
 	"string"	=> {},
-	"type"		=> "scalar",
+	"timeout"	=> 10,
 	"tmpdir"	=> "/usr/tmp",
+	"type"		=> "scalar",
+	"verbose"	=> 0,
 	#"ok"		=> "0:0",
 	#"warning"	=> "1:1",
 	#"critical"	=> "1:1",
@@ -134,16 +133,20 @@ sub process_parameters {
         	print "$MYSELF error: no commandline specified\n";
 		short_usage();
         	return $UNKNOWN;
+	} else {
+		$cmd{command}=$opt{execute};
+		$cmd{name}=$opt{execute};
 	}
+
 	if (!$opt{ok} && !$opt{warning} && !$opt{critical} && !$opt{unknown}) {
-        	print "$MYSELF error: no comparison expression specified\n";
+        	print "$MYSELF error: no evaluation expression specified\n";
 		short_usage();
         	return $UNKNOWN;
 	} else {
 		foreach my $state (reverse @{$rc{textsev}}) {
 			if (defined($opt{$state})) {
 				$opt{string}{$state}=is_string_cmp($opt{$state});
-				debug(3,"process_parameters: state $state defined:$opt{$state}, text comparison:$opt{string}{$state}");
+				debug(3,"process_parameters: state $state defined:$opt{$state}, text evaluation:$opt{string}{$state}");
 			} else {
 				debug(3,"process_parameters: state $state not defined");
 			}
@@ -180,8 +183,8 @@ sub process_parameters {
 		#--- read content of old tmpfile if available
 		my $content=readfile("$opt{tmpdir}/$opt{tmpfile}");
 		if ($content ne "") {
-			($cmds{$no}{old_timestamp},$cmds{$no}{old_output})=split(/\s+/,$content);
-			debug(2, "process_parameter: old_timestamp:$cmds{$no}{old_timestamp} old_output:$cmds{$no}{old_output}");
+			($cmd{old_timestamp},$cmd{old_output})=split(/\s+/,$content);
+			debug(2, "process_parameter: old_timestamp:$cmd{old_timestamp} old_output:$cmd{old_output}");
 		}
 	}
 	debug(2, "verbosity:$opt{verbose}");
@@ -276,7 +279,7 @@ sub writefile {
 }
 
 #---
-#--- check if expression is string comparison
+#--- check if expression is string evaluation
 #---
 sub is_string_cmp {
 	my $expression=shift;
@@ -286,11 +289,39 @@ sub is_string_cmp {
 	}
 	return 0;
 }
+#
+#---
+sub match_env {
+        my ($string, $expr, $wanted_length)=@_;
+        my @match=();
+        my @len=();
+        my $total="";
+        my $little_cute_proc="if (\'${string}\'${expr}) { \@match=(\$\`,\$\&,\$\'); }";
+        eval($little_cute_proc);
+        for my $i (0..$#match) {
+                $len[$i]=length($match[$i]);
+                $total.=$match[$i];
+                 print "match $i: $match[$i] ($len[$i])\n";
+        }
+        # 1. string too small -> return all
+        if (length($total) < $wanted_length) {
+                return $total;
+        # 2. left portion too small -> return $wanted_length from left
+        } elsif ($len[0] < ($wanted_length-$len[1])/2) {
+                return substr($total,0,$wanted_length);
+        # 3. right portion too small -> return $wanted_length from right
+        } elsif ($len[2] < ($wanted_length-$len[1])/2) {
+                return substr($total,$wanted_length*-1);
+        # 4. snip part from the middle
+        } else {
+                return substr($total,$len[0]-($wanted_length-$len[1])/2,$wanted_length);
+        }
+}
 
 #---
 #--- taken from Perl Cookbook ;-)
 #---
-sub is_valid_pattern {
+sub is_valid_regex {
     my $pat = shift;
     return eval { "" =~ /$pat/; 1 } || 0;
 }
@@ -348,10 +379,10 @@ sub get_tmpfile {
 }
 
 #---
-#--- execute $command, return result in %cmds 
+#--- execute $command, return result in %cmd 
 #---
 sub exec_command {
-	my ($no)=@_;
+	my ($cmd)=@_;
 	my $tmp_stdout="";
 	my $tmp_stderr="";
 
@@ -365,27 +396,28 @@ sub exec_command {
 		$tmp_stderr=&get_tmpfile("/tmp", "${MYSELF}_stderr_$$");
 
 		#--- execute command and store stdout/stderr/return code
-		`$cmds{$no}{command} 1>$tmp_stdout 2>$tmp_stderr`;
-		$cmds{$no}{rc}=$? >> 8;
-		$cmds{$no}{timestamp}=time;
+		`$cmd{command} 1>$tmp_stdout 2>$tmp_stderr`;
+		$cmd{rc}=$? >> 8;
+		$cmd{timestamp}=time;
 
 		#--- store stdout/stderr and cleanup tmpfiles
-		$cmds{$no}{output}=readfile($tmp_stdout);
-		$cmds{$no}{stderr}=readfile($tmp_stderr);
+		$cmd{output}=readfile($tmp_stdout);
+		$cmd{stderr}=readfile($tmp_stderr);
 		unlink $tmp_stdout, $tmp_stderr;
-		#debug(1, "exec_command: output:>$cmds{$no}{output}< stderr:>$cmds{$no}{stderr}<n");
+		debug(1, "exec_command: output:>$cmd{output}< stderr:>$cmd{stderr}<n");
 
 		#--- unknown return code? change it explicitly to UNKNOWN
-		if (!defined($rc{r2s}{$cmds{$no}{rc}})) {
-			$cmds{$no}{stderr}.=" RC was $cmds{no}{rc}!";
-			$cmds{$no}{rc}=$UNKNOWN;
+		if (!defined($rc{r2s}{$cmd{rc}})) {
+			$cmd{stderr}.=" RC was $cmd{no}{rc}!";
+			$cmd{rc}=$UNKNOWN;
 		}
 		
 		#--- remove white chars from output
-		$cmds{$no}{output}=mytrim($cmds{$no}{output},"\\n\\s");
-		$cmds{$no}{stderr}=mytrim($cmds{$no}{stderr},"\\n\\s");
+		#$cmd{output}=mytrim($cmd{output},"\\n\\s");
+		$cmd{output}=~s/\\n//;
+		#$cmd{stderr}=mytrim($cmd{stderr},"\\n\\s");
 
-		#print "DEBUG output:>$cmds{$no}{output}< stderr:>$cmds{$no}{stderr}<n";
+		#print "DEBUG output:>$cmd{output}< stderr:>$cmd{stderr}<n";
 
 		alarm(0);
 	};
@@ -394,8 +426,8 @@ sub exec_command {
 	if ($@) {
 		#--- timeout encountered: store status
 		if ($@ =~ /timeout/) {
-			$cmds{$no}{output}="UNKNOWN - \'$command\' cancelled after timeout ($opt{timeout}s)";
-			$cmds{$no}{rc}=$UNKNOWN;
+			$cmd{output}="UNKNOWN - \'$command\' cancelled after timeout ($opt{timeout}s)";
+			$cmd{rc}=$UNKNOWN;
 		#--- catchall for unknown errors
 		} else {
 			alarm(0);
@@ -403,95 +435,101 @@ sub exec_command {
 		}
 		unlink $tmp_stdout, $tmp_stderr;
 	}
-	return $cmds{$no}{rc};
+	return $cmd{rc};
 }
 
 #---
-#--- analyze results stored in %cmds
+#--- analyze results stored in %cmd
 #---
 sub do_analysis {
-	my ($no)=@_;
+	my ($cmd)=@_;
 	#debug(2,"do_analysis: state:$opt{state} false:$opt{false} number{false}:($rc{number}{$opt{false}})");
 	my $returncode=$rc{number}{$opt{false}};
 
 	#--- first: check return code
-	if ($cmds{$no}{rc} != 0) {
-		print "$opt{name} UNKNOWN - cmd $cmds{$no}{command}: $cmds{$no}{output} [$cmds{$no}{stderr}]\n";
+	if ($cmd{rc} != 0) {
+		print "$opt{name} UNKNOWN - cmd $cmd{command}: $cmd{output} [$cmd{stderr}]\n";
 		return $UNKNOWN;
 	}
 
 	#--- check type
 	if ($opt{type} eq "delta") {
-		if (defined($cmds{$no}{old_timestamp}) && $cmds{$no}{old_timestamp} > 0) {
-			$cmds{$no}{elapsed_seconds}=$cmds{$no}{timestamp}-$cmds{$no}{old_timestamp};
-			$cmds{$no}{delta}=$cmds{$no}{output}-$cmds{$no}{old_output};
-			writefile("$opt{tmpdir}/$opt{tmpfile}", "$cmds{$no}{timestamp} $cmds{$no}{output}");
-			debug(2, "do_analysis: elapsed_seconds:$cmds{$no}{elapsed_seconds} delta:$cmds{$no}{delta}");
-			if ($cmds{$no}{elapsed_seconds} > 0) {
-				$cmds{$no}{output}=sprintf "%.2f", $cmds{$no}{delta}/$cmds{$no}{elapsed_seconds};
+		if (defined($cmd{old_timestamp}) && $cmd{old_timestamp} > 0) {
+			$cmd{elapsed_seconds}=$cmd{timestamp}-$cmd{old_timestamp};
+			$cmd{delta}=$cmd{output}-$cmd{old_output};
+			writefile("$opt{tmpdir}/$opt{tmpfile}", "$cmd{timestamp} $cmd{output}");
+			debug(2, "do_analysis: elapsed_seconds:$cmd{elapsed_seconds} delta:$cmd{delta}");
+			if ($cmd{elapsed_seconds} > 0) {
+				$cmd{output}=sprintf "%.2f", $cmd{delta}/$cmd{elapsed_seconds};
 			}
 		} else {
-			writefile("$opt{tmpdir}/$opt{tmpfile}", "$cmds{$no}{timestamp} $cmds{$no}{output}");
-			print "$opt{name} UNKNOWN - cmd $cmds{$no}{command}: $cmds{$no}{output} [$cmds{$no}{stderr}] no previous output available\n";
+			writefile("$opt{tmpdir}/$opt{tmpfile}", "$cmd{timestamp} $cmd{output}");
+			print "$opt{name} UNKNOWN - cmd $cmd{command}: $cmd{output} [$cmd{stderr}] no previous output available\n";
                 	return $UNKNOWN;
 		}
 	}
 
 	#--- start with no match
-	$cmds{$no}{match}="no";
+	$cmd{match}="none";
+	$cmd{matchlist}=[];
 
 	#--- step forward in the order of severity from OK to CRITICAL
 	foreach my $severity (@{$rc{textsev}}) {
 
 		if (defined($opt{$severity})) {
-			debug(2,"do_analysis: compare \'$cmds{$no}{output}\' <-> \'$opt{$severity}\'");
+			my $expression="\'$cmd{output}\'$opt{$severity}";
+			debug(2,"do_analysis: evaluate $expression");
 			#--- can be numerical or string evaluation
-			if ($cmds{$no}{result}=eval("\'$cmds{$no}{output}\'$opt{$severity}")) {
-				$cmds{$no}{test}=$1;
-				$cmds{$no}{match}=$opt{$severity};
-				$cmds{$no}{output}=$1;
+			if ($cmd{result}=eval($expression)) {
+				$cmd{match}=$opt{$severity};
+				push @{$cmd{matchlist}},$severity;
 				$returncode=$rc{number}{$severity};
-				debug(2,"do_analysis: eval successful rc:$returncode match:\'$cmds{$no}{match}\'");
+				if ($opt{$severity}=~/[=!]~/) {
+					$cmd{test}=match_env($opt{output},$opt{$severity},50);
+				}
+				debug(2,"do_analysis: eval successful rc:$returncode match:\'$cmd{match}\'");
 			} else {
-				debug(2,"do_analysis: eval *not* successful rc:$returncode expression:\'$cmds{$no}{output}\'$opt{$severity}");
+				debug(2,"do_analysis: eval *not* successful rc:$returncode expression:\'$cmd{output}\'$opt{$severity}");
 			}
 			
 		}
 	}
 	return $returncode;
 }
+sub do_report {
+	my $cmd=shift;	
+	#--- report results
+	printf "%s %s - result:%s eval:%s matches:%s test:%s",
+		$opt{name},
+		$rc{label}{$rc{rc}},
+		$cmd{output},
+		$cmd{match},
+		join(',',@{$cmd{matchlist}}),
+		$cmd{test};
+	printf "|%s=$cmd{output}", $opt{performance}, $cmd{output} if ($opt{performance});
+	printf "\n";
+}
 #-------------------------------------------------------------------------------
 #--- main ----------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 
-#--- set command no
-$no=1;
-
 #--- parse command line options
-exit $UNKNOWN if (&process_parameters != $OK);
+if (&process_parameters != $OK) {
+	exit $UNKNOWN;
+}
 
 #--- initialize timer for overall timeout
 $rc{starttime}=time;
-$rc{endtime}=$rc{starttime} + $opt{TIMEOUT};
-
-#--- fetch command
-$cmds{$no}{command}=$opt{execute};
-$cmds{$no}{name}=$opt{execute};
+$rc{endtime}=$rc{starttime} + $opt{timeout};
 
 #--- execute command
-&exec_command($no);
+&exec_command(\%cmd);
 
-#--- report results
-$rc{rc}=&do_analysis($no);
-printf "%s %s - result:%s match:%s test:%s",
-	$opt{name},
-	$rc{label}{$rc{rc}},
-	#substr(mytrim($cmds{$no}{output},"\\n\\s"),0,80),
-	$cmds{$no}{output},
-	$cmds{$no}{match},
-	$cmds{$no}{test};
-printf "|%s=$cmds{$no}{output}", $opt{performance}, $cmds{$no}{output} if ($opt{performance});
-printf "\n";
+#--- analyze results
+$rc{rc}=&do_analysis(\%cmd);
+
+#--- report
+&do_report(\%cmd);
 
 #--- return rc with highest severity
 exit $rc{rc};
