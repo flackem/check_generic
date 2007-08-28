@@ -414,7 +414,7 @@ sub exec_command {
 		
 		#--- remove white chars from output
 		#$cmd{output}=mytrim($cmd{output},"\\n\\s");
-		$cmd{output}=~s/\\n//;
+		$cmd{output}=~s/\n//m;
 		#$cmd{stderr}=mytrim($cmd{stderr},"\\n\\s");
 
 		#print "DEBUG output:>$cmd{output}< stderr:>$cmd{stderr}<n";
@@ -485,7 +485,7 @@ sub do_analysis {
 				push @{$cmd{matchlist}},$severity;
 				$returncode=$rc{number}{$severity};
 				if ($opt{$severity}=~/[=!]~/) {
-					$cmd{test}=match_env($opt{output},$opt{$severity},50);
+					$cmd{output}=match_env($cmd{output},$opt{$severity},50);
 				}
 				debug(2,"do_analysis: eval successful rc:$returncode match:\'$cmd{match}\'");
 			} else {
