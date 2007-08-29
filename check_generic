@@ -298,24 +298,13 @@ sub match_env {
         my $total="";
         my $cute_little_proc="if (\'${string}\'${expr}) { \@match=(\$\`,\$\&,\$\'); }";
         eval($cute_little_proc);
-        for my $i (0..$#match) {
-                $len[$i]=length($match[$i]);
-                $total.=$match[$i];
-                 print "match $i: $match[$i] ($len[$i])\n";
-        }
-        # 1. string too small -> return all
-        if (length($total) < $wanted_length) {
-                return $total;
-        # 2. left portion too small -> return $wanted_length from left
-        } elsif ($len[0] < ($wanted_length-$len[1])/2) {
-                return substr($total,0,$wanted_length);
-        # 3. right portion too small -> return $wanted_length from right
-        } elsif ($len[2] < ($wanted_length-$len[1])/2) {
-                return substr($total,$wanted_length*-1);
-        # 4. snip part from the middle
-        } else {
-                return substr($total,$len[0]-($wanted_length-$len[1])/2,$wanted_length);
-        }
+        #for my $i (0..$#match) {
+                #$len[$i]=length($match[$i]);
+                 #print "match $i: $match[$i] ($len[$i])\n";
+        #}
+	return	squeeze($match[0],"right",$wanted_length/3) . 
+		squeeze($match[1],"middle",$wanted_length/3) . 
+		squeeze($match[2],"left",$wanted_length/3);
 }
 
 #---
@@ -323,9 +312,12 @@ sub match_env {
 #---
 sub squeeze {
 	my ($string,$fromwhere,$num)=@_;
+
+	return "" if (!defined($string));
+
+	my $len=length($string);
 	my $replacement="[...]";
 	my $rlen=5;  		# length($replacement)
-	my $len=length($string);
 
 	#--- nothing to squeeze ;-)
 	return $string if ($len<=$num);
@@ -437,7 +429,7 @@ sub exec_command {
 		
 		#--- remove white chars from output
 		#$cmd{output}=mytrim($cmd{output},"\\n\\s");
-		$cmd{output}=~s/\\n//m;
+		$cmd{output}=~s/\n/\\n/mg;
 		#$cmd{stderr}=mytrim($cmd{stderr},"\\n\\s");
 
 		#print "DEBUG output:>$cmd{output}< stderr:>$cmd{stderr}<n";
@@ -498,7 +490,7 @@ sub do_analysis {
 
 	#--- start with no match
 	$cmd{match}="none";
-	$cmd{matchlist}=[];
+	$cmd{matchlist}=();
 
 	#--- step forward in the order of severity from OK to CRITICAL
 	foreach my $severity (@{$rc{textsev}}) {
@@ -528,13 +520,12 @@ sub do_analysis {
 sub do_report {
 	my $cmd=shift;	
 	#--- report results
-	printf "%s %s - result:%s eval:%s matches:%s test:%s",
+	printf "%s %s - input:%s expression:%s matches:%s",
 		$opt{name},
 		$rc{label}{$rc{rc}},
 		$cmd{output},
 		$cmd{match},
-		join(',',@{$cmd{matchlist}}),
-		$cmd{test};
+		join(',',@{$cmd{matchlist}});
 	printf "|%s=$cmd{output}", $opt{performance}, $cmd{output} if ($opt{performance});
 	printf "\n";
 }
