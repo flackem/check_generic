@@ -56,7 +56,9 @@ $DETAIL_STDERR=4;
 $DETAIL_PERFORMANCE=8;
 #
 #--- vars
-%cmd=();
+%cmd=(
+	matchlist => [],
+);
 %rc=(
 	label	=> { $OK => "OK", $WARNING => "WARNING", $CRITICAL => "CRITICAL", $UNKNOWN => "UNKNOWN", },
 	number	=> { "OK" => $OK, "WARNING" => $WARNING, "CRITICAL" => $CRITICAL, "UNKNOWN" => $UNKNOWN, 
@@ -328,6 +330,8 @@ sub squeeze {
 		return $replacement . substr($string,($len/2)-($num/2)+$rlen,$num-($rlen*2)) . $replacement;
 	} elsif ($fromwhere eq "right") {
 		return $replacement . substr($string,$num*-1+$rlen);
+	} elsif ($fromwhere eq "both") {
+		return substr($string,0,$num/2-($rlen/2)) . $replacement . substr($string,($num*-1)/2+($rlen/2));
 	} else {
 		return "squeeze error: unknown fromwhere parameter $fromwhere\n";
 	}
@@ -419,7 +423,7 @@ sub exec_command {
 		$cmd{output}=readfile($tmp_stdout);
 		$cmd{stderr}=readfile($tmp_stderr);
 		unlink $tmp_stdout, $tmp_stderr;
-		debug(1, "exec_command: output:>" . squeeze($cmd{output},"left",80) . "< stderr:>" . squeeze($cmd{stderr},"left",80) . "<n");
+		debug(1, "exec_command: output:>" . squeeze($cmd{output},"both",80) . "< stderr:>" . squeeze($cmd{stderr},"both",80) . "<");
 
 		#--- unknown return code? change it explicitly to UNKNOWN
 		if (!defined($rc{r2s}{$cmd{rc}})) {
@@ -428,8 +432,8 @@ sub exec_command {
 		}
 		
 		#--- remove white chars from output
-		#$cmd{output}=mytrim($cmd{output},"\\n\\s");
 		$cmd{output}=~s/\n/\\n/mg;
+		#$cmd{output}=mytrim($cmd{output},"\\n\\s");
 		#$cmd{stderr}=mytrim($cmd{stderr},"\\n\\s");
 
 		#print "DEBUG output:>$cmd{output}< stderr:>$cmd{stderr}<n";
@@ -490,7 +494,7 @@ sub do_analysis {
 
 	#--- start with no match
 	$cmd{match}="none";
-	$cmd{matchlist}=();
+	$cmd{matchlist}=[];
 
 	#--- step forward in the order of severity from OK to CRITICAL
 	foreach my $severity (@{$rc{textsev}}) {
@@ -498,7 +502,7 @@ sub do_analysis {
 		if (defined($opt{$severity})) {
 			my $expression="\'$cmd{output}\'$opt{$severity}";
 			debug(2,"do_analysis: evaluate \'" . squeeze($cmd{output},"left",80) . 
-				"\'" . squeeze($opt{severity},"left",80));
+				"\'" . squeeze($opt{$severity},"both",80));
 			#--- can be numerical or string evaluation
 			if ($cmd{result}=eval($expression)) {
 				$cmd{match}=$opt{$severity};
@@ -510,7 +514,7 @@ sub do_analysis {
 				debug(2,"do_analysis: eval successful rc:$returncode match:\'$cmd{match}\'");
 			} else {
 				debug(2,"do_analysis: eval *not* successful rc:$returncode expression:\'" . 
-					squeeze($cmd{output},"left",80) . "\'$opt{$severity}");
+					squeeze($cmd{output},"both",80) . "\'$opt{$severity}");
 			}
 			
 		}
@@ -520,13 +524,13 @@ sub do_analysis {
 sub do_report {
 	my $cmd=shift;	
 	#--- report results
-	printf "%s %s - input:%s expression:%s matches:%s",
+	printf "%s %s - input:%s match:%s severities:%s",
 		$opt{name},
 		$rc{label}{$rc{rc}},
-		$cmd{output},
+		squeeze($cmd{output},"left",50),
 		$cmd{match},
 		join(',',@{$cmd{matchlist}});
-	printf "|%s=$cmd{output}", $opt{performance}, $cmd{output} if ($opt{performance});
+	printf "|%s=%s", $opt{performance}, squeeze($cmd{output},"left",80) if ($opt{performance});
 	printf "\n";
 }
 #-------------------------------------------------------------------------------
