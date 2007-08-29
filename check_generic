@@ -296,8 +296,8 @@ sub match_env {
         my @match=();
         my @len=();
         my $total="";
-        my $little_cute_proc="if (\'${string}\'${expr}) { \@match=(\$\`,\$\&,\$\'); }";
-        eval($little_cute_proc);
+        my $cute_little_proc="if (\'${string}\'${expr}) { \@match=(\$\`,\$\&,\$\'); }";
+        eval($cute_little_proc);
         for my $i (0..$#match) {
                 $len[$i]=length($match[$i]);
                 $total.=$match[$i];
@@ -316,6 +316,29 @@ sub match_env {
         } else {
                 return substr($total,$len[0]-($wanted_length-$len[1])/2,$wanted_length);
         }
+}
+
+#---
+#--- squeeze string
+#---
+sub squeeze {
+	my ($string,$fromwhere,$num)=@_;
+	my $replacement="[...]";
+	my $rlen=5;  		# length($replacement)
+	my $len=length($string);
+
+	#--- nothing to squeeze ;-)
+	return $string if ($len<=$num);
+
+	if ($fromwhere eq "left") {
+		return substr($string,0,$num-$rlen) . $replacement;
+	} elsif ($fromwhere eq "middle") {
+		return $replacement . substr($string,($len/2)-($num/2)+$rlen,$num-($rlen*2)) . $replacement;
+	} elsif ($fromwhere eq "right") {
+		return $replacement . substr($string,$num*-1+$rlen);
+	} else {
+		return "squeeze error: unknown fromwhere parameter $fromwhere\n";
+	}
 }
 
 #---
@@ -404,7 +427,7 @@ sub exec_command {
 		$cmd{output}=readfile($tmp_stdout);
 		$cmd{stderr}=readfile($tmp_stderr);
 		unlink $tmp_stdout, $tmp_stderr;
-		debug(1, "exec_command: output:>$cmd{output}< stderr:>$cmd{stderr}<n");
+		debug(1, "exec_command: output:>" . squeeze($cmd{output},"left",80) . "< stderr:>" . squeeze($cmd{stderr},"left",80) . "<n");
 
 		#--- unknown return code? change it explicitly to UNKNOWN
 		if (!defined($rc{r2s}{$cmd{rc}})) {
@@ -414,7 +437,7 @@ sub exec_command {
 		
 		#--- remove white chars from output
 		#$cmd{output}=mytrim($cmd{output},"\\n\\s");
-		$cmd{output}=~s/\n//m;
+		$cmd{output}=~s/\\n//m;
 		#$cmd{stderr}=mytrim($cmd{stderr},"\\n\\s");
 
 		#print "DEBUG output:>$cmd{output}< stderr:>$cmd{stderr}<n";
@@ -448,7 +471,9 @@ sub do_analysis {
 
 	#--- first: check return code
 	if ($cmd{rc} != 0) {
-		print "$opt{name} UNKNOWN - cmd $cmd{command}: $cmd{output} [$cmd{stderr}]\n";
+		print "$opt{name} UNKNOWN - cmd $cmd{command}: " .
+			squeeze($cmd{output},"left",80) .
+			" [" . squeeze($cmd{stderr},"left",80) . "]\n";
 		return $UNKNOWN;
 	}
 
@@ -464,7 +489,9 @@ sub do_analysis {
 			}
 		} else {
 			writefile("$opt{tmpdir}/$opt{tmpfile}", "$cmd{timestamp} $cmd{output}");
-			print "$opt{name} UNKNOWN - cmd $cmd{command}: $cmd{output} [$cmd{stderr}] no previous output available\n";
+			print "$opt{name} UNKNOWN - cmd $cmd{command}: " . 
+				squeeze($cmd{output},"left",80) . 
+				" [" . squeeze($cmd{stderr},"left",80) . "no previous output available\n";
                 	return $UNKNOWN;
 		}
 	}
@@ -478,7 +505,8 @@ sub do_analysis {
 
 		if (defined($opt{$severity})) {
 			my $expression="\'$cmd{output}\'$opt{$severity}";
-			debug(2,"do_analysis: evaluate $expression");
+			debug(2,"do_analysis: evaluate \'" . squeeze($cmd{output},"left",80) . 
+				"\'" . squeeze($opt{severity},"left",80));
 			#--- can be numerical or string evaluation
 			if ($cmd{result}=eval($expression)) {
 				$cmd{match}=$opt{$severity};
@@ -489,7 +517,8 @@ sub do_analysis {
 				}
 				debug(2,"do_analysis: eval successful rc:$returncode match:\'$cmd{match}\'");
 			} else {
-				debug(2,"do_analysis: eval *not* successful rc:$returncode expression:\'$cmd{output}\'$opt{$severity}");
+				debug(2,"do_analysis: eval *not* successful rc:$returncode expression:\'" . 
+					squeeze($cmd{output},"left",80) . "\'$opt{$severity}");
 			}
 			
 		}
