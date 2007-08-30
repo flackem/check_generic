@@ -20,7 +20,6 @@
 #
 #
 # TODO
-# - performance output, how to gather?
 #
 #
 # $Id$
@@ -147,8 +146,8 @@ sub process_parameters {
 	} else {
 		foreach my $state (reverse @{$rc{textsev}}) {
 			if (defined($opt{$state})) {
-				$opt{string}{$state}=is_string_cmp($opt{$state});
-				debug(3,"process_parameters: state $state defined:$opt{$state}, text evaluation:$opt{string}{$state}");
+				$opt{string}=is_string_cmp($opt{$state});
+				debug(3,"process_parameters: state $state defined:$opt{$state}, text evaluation:$opt{string}");
 			} else {
 				debug(3,"process_parameters: state $state not defined");
 			}
@@ -432,7 +431,7 @@ sub exec_command {
 		}
 		
 		#--- remove white chars from output
-		$cmd{output}=~s/\n/\\n/mg;
+		#$cmd{output}=~s/\n/\\n/mg;
 		#$cmd{output}=mytrim($cmd{output},"\\n\\s");
 		#$cmd{stderr}=mytrim($cmd{stderr},"\\n\\s");
 
@@ -496,6 +495,16 @@ sub do_analysis {
 	$cmd{match}="none";
 	$cmd{matchlist}=[];
 
+	if ($opt{string}) {
+		#--- escape newlines in multiline pattern
+		$cmd{output}=~s/\n/\\n/mg;
+		$cmd{result}=squeeze($cmd{output},"left",50);
+	} else {
+		#--- remove last newline from numerical patterns
+		chomp($cmd{output}) if ($cmd{output}=~/\n$/);
+		$cmd{result}=$cmd{output};
+	}
+
 	#--- step forward in the order of severity from OK to CRITICAL
 	foreach my $severity (@{$rc{textsev}}) {
 
@@ -504,14 +513,14 @@ sub do_analysis {
 			debug(2,"do_analysis: evaluate \'" . squeeze($cmd{output},"left",80) . 
 				"\'" . squeeze($opt{$severity},"both",80));
 			#--- can be numerical or string evaluation
-			if ($cmd{result}=eval($expression)) {
+			if (eval($expression)) {
 				$cmd{match}=$opt{$severity};
 				push @{$cmd{matchlist}},$severity;
 				$returncode=$rc{number}{$severity};
-				if ($opt{$severity}=~/[=!]~/) {
-					$cmd{output}=match_env($cmd{output},$opt{$severity},50);
+				if ($opt{string}) {
+					$cmd{result}=match_env($cmd{output},$opt{$severity},50);
 				}
-				debug(2,"do_analysis: eval successful rc:$returncode match:\'$cmd{match}\'");
+				debug(2,"do_analysis: eval successful rc:$returncode result:\'$cmd{result}\' match:\'$cmd{match}\'");
 			} else {
 				debug(2,"do_analysis: eval *not* successful rc:$returncode expression:\'" . 
 					squeeze($cmd{output},"both",80) . "\'$opt{$severity}");
@@ -524,12 +533,12 @@ sub do_analysis {
 sub do_report {
 	my $cmd=shift;	
 	#--- report results
-	printf "%s %s - input:%s match:%s severities:%s",
+	printf "%s %s - result:%s match:%s %s",
 		$opt{name},
 		$rc{label}{$rc{rc}},
-		squeeze($cmd{output},"left",50),
+		$cmd{result},
 		$cmd{match},
-		join(',',@{$cmd{matchlist}});
+		(@{$cmd{matchlist}}) ? "severities:" . join(',',@{$cmd{matchlist}}) : "";
 	printf "|%s=%s", $opt{performance}, squeeze($cmd{output},"left",80) if ($opt{performance});
 	printf "\n";
 }
