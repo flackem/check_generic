@@ -84,7 +84,7 @@ my %opt=(
 	"report"	=> 15,
 	"string"	=> {},
 	"timeout"	=> 10,
-	"tmpdir"	=> "/usr/tmp",
+	"tmpdir"	=> "/usr/tmp/check_generic",
 	"type"		=> "scalar",
 	"verbose"	=> 0,
 	#"ok"		=> "0:0",
@@ -184,8 +184,18 @@ sub process_parameters {
 		#--- read content of old tmpfile if available
 		my $content=readfile("$opt{tmpdir}/$opt{tmpfile}");
 		if ($content ne "") {
+			chomp $content;
 			($cmd{old_timestamp},$cmd{old_output})=split(/\s+/,$content);
 			debug(2, "process_parameter: old_timestamp:$cmd{old_timestamp} old_output:$cmd{old_output}");
+		}
+		#--- remove old files in tmpdir older than one day
+		&garbage_collection(24*60*60);
+	}
+	if (! -d $opt{tmpdir}) {
+		mkdir $opt{tmpdir};
+		if (! -d $opt{tmpdir}) {
+			print  "mkdir $opt{tmpdir} failed:$!";
+			return $UNKNOWN if (defined($opt{delta}));
 		}
 	}
 	debug(2, "verbosity:$opt{verbose}");
@@ -228,6 +238,7 @@ Options:
    timeout for one command, default: $opt{timeout}
 -d, --tmpdir
    specify directory for tmpfiles, default: $opt{tmpdir}
+   (caveat: garbage collection is done in this directory)
 -v, --verbose
    increase verbosity (can be called multiple), default: $opt{verbose}
 -h, --help
@@ -394,6 +405,21 @@ sub get_tmpfile {
 	}
 	add_error("get_tmpfile: giving up opening $tmpfile after $attempt attempts:$!");
 	return "";
+}
+
+#---
+#--- remove too old files from $tmpdir
+#---
+sub garbage_collection {
+	my $interval=shift;
+	opendir(DIR, $opt{tmpdir}) or die "can't opendir $opt{tmpdir}: $!";
+	while (defined(my $filename = readdir(DIR))) {
+		next if ($filename!~/^$MYSELF/);
+		my $mtime=(stat("$opt{tmpdir}/$filename"))[9];
+		unlink "$opt{tmpdir}/$filename" if (time-$mtime>$interval);
+		debug(2,"tried to remove $opt{tmpdir}/$filename");
+	}
+	closedir(DIR);
 }
 
 #---
