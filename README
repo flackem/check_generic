@@ -1,0 +1,71 @@
+
+-------------
+check_generic
+-------------
+
+
+Motivation
+----------
+There are numerous plugins which are exactly for one purpose. 
+This is exactly the opposite of the basic Unix principle that 
+each tool is just for one purpose and more complex tasks can
+be done by a combination of these tools.
+
+===== check_generic =====
+  * Erste Idee //[[matthias.flacke@gmx.net|Matthias Flacke]] 2007/08/09 05:48// ;-)
+  * Ziel: generisches Plugin schaffen, das alle Eigenschaften per Parameter erhaelt
+  * Input: Command
+  * Regel: Output matcht Pattern, oder Output vs. Rule
+  * Output: Status und Performance
+
+
+
+
+
+===== Beispiele =====
+
+  * Disk integrity check with smartctl
+  $ ./check_generic -n smartctl -x "/usr/sbin/smartctl -H /dev/hda | grep 'test result'" -o "=~/PASSED/i"
+  smartctl OK - output:>SMART overall-health self-assessment test result: PASSED< condition:>=~/PASSED/i<
+
+  * Processor temperature via ACPI
+  $ ./check_generic -n cpu_temperature -x "cat /proc/acpi/thermal_zone/THM0/temperature | awk '{print \$2}'" -w ">40" -c ">50"  
+  cpu_temperature WARNING - output:>42< condition:>>40<
+
+
+./check_generic --help
+
+<code>check_generic -x <cmdline> -o|u|w|c <expression> [-s state] [-f false_state] [-n name] [-t timeout] [-r level]
+check_generic [-h | --help]
+check_generic [-V | --version]
+
+Options:
+-x, --execute <cmdline>
+   string which contains commands to be executed
+   (can be a complete filter chain)
+-u|w|c|o, --unknown,warning,critical,ok <expression>
+   operator is perl operators, e.g.
+      '== n'    - numerically equal
+      '< n'     - numerically equal
+      '> n'     - numerically equal
+      'eq s'    - string equal
+      'ne s'    - string non equal
+      '=~ /s/   - pattern matching
+-s, --state [u|UNKNOWN|w|WARNING|c|CRITICAL|o|OK]
+   which state the plugin should become if the expression is true
+   default: CRITICAL
+-f, --false [u|UNKNOWN|w|WARNING|c|CRITICAL|o|OK]
+   which state the plugin should become if the expression is false
+   default: complement of state
+-y, --type [SCALAR,ARRAY,DELTA]
+   type of data value
+-n, --name
+   plugin name (shown in output), default: CHANGEME
+-t, --timeout
+   timeout for one command, default: 10
+-h, --help
+   print detailed help screen
+-V, --version
+   print version information
+</code>
+

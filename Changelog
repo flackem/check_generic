@@ -1,1 +1,7 @@
-- added match_env to report string matches
+
+===== Changelog =====
+
+  *0.01*        30.08.2007
+        * added garbage_collection to remove obsolete delta files
+        * fixed numerical output 
+        * added match_env to report string matches
