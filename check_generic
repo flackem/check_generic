@@ -295,7 +295,7 @@ sub writefile {
 #---
 sub is_string_cmp {
 	my $expression=shift;
-	my %stringop=('lt','gt','le','ge','\=\~','\!\~','eq','ne');
+	my %stringop=(' lt ',' gt ',' le ',' ge ','\=\~','\!\~',' eq ',' ne ');
 	foreach my $key (keys(%stringop)) {
 		return 1 if ($expression=~/^\s*$key/);
 	}
@@ -309,11 +309,13 @@ sub match_env {
         my @len=();
         my $total="";
         my $cute_little_proc="if (\'${string}\'${expr}) { \@match=(\$\`,\$\&,\$\'); }";
-        eval($cute_little_proc);
-        #for my $i (0..$#match) {
-                #$len[$i]=length($match[$i]);
-                 #print "match $i: $match[$i] ($len[$i])\n";
-        #}
+        my $rc=eval($cute_little_proc);
+	print "match_env: cute_little_proc:$cute_little_proc\n";
+	print "match_env: string:$string expr:$expr wanted_length:$wanted_length rc eval:$rc eval:$@\n";
+        for my $i (0..$#match) {
+                $len[$i]=length($match[$i]);
+                print "match $i: $match[$i] ($len[$i])\n";
+        }
 	return	squeeze($match[0],"right",$wanted_length/3) . 
 		squeeze($match[1],"middle",$wanted_length/3) . 
 		squeeze($match[2],"left",$wanted_length/3);
@@ -539,20 +541,24 @@ sub do_analysis {
 
 		if (defined($opt{$severity})) {
 			my $expression="\'$cmd{output}\'$opt{$severity}";
-			debug(2,"do_analysis: evaluate \'" . squeeze($cmd{output},"left",80) . 
-				"\'" . squeeze($opt{$severity},"both",80));
+			debug(2,"do_analysis: evaluate expression for severity $severity >\'" . squeeze($cmd{output},"left",80) . 
+				"\'" . squeeze($opt{$severity},"both",80)."<");
 			#--- can be numerical or string evaluation
 			if (eval($expression)) {
 				$cmd{match}=$opt{$severity};
 				push @{$cmd{matchlist}},$severity;
 				$returncode=$rc{number}{$severity};
 				if ($opt{string}) {
-					$cmd{result}=match_env($cmd{output},$opt{$severity},50);
+					$cmd{result}="x" . match_env($cmd{output},$opt{$severity},50);
+				} else {
+					$cmd{result}=$cmd{output};
+					#$cmd{result}=squeeze($cmd{output},"both",80);
 				}
-				debug(2,"do_analysis: eval successful rc:$returncode result:\'$cmd{result}\' match:\'$cmd{match}\'");
+				debug(2,"do_analysis: eval was successful rc:$returncode result:\'$cmd{result}\' match:\'$cmd{match}\'");
 			} else {
-				debug(2,"do_analysis: eval *not* successful rc:$returncode expression:\'" . 
-					squeeze($cmd{output},"both",80) . "\'$opt{$severity}");
+				$cmd{result}=squeeze($cmd{output},"both",80);
+				debug(2,"do_analysis: eval was *not* successful rc:$returncode severity:$severity expression:>\'" . 
+					squeeze($cmd{output},"both",80) . "\'$opt{$severity}<");
 			}
 			
 		}
