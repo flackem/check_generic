@@ -79,6 +79,7 @@ $DETAIL_PERFORMANCE=8;
 my %opt=(
 	"configfile"	=> "",
 	"libexec"	=> "/usr/local/nagios/libexec",
+	"maxage"	=> 24, #hours
 	"name"		=> "CHANGEME",
 	"performance"	=> undef,
 	"report"	=> 15,
@@ -171,6 +172,12 @@ sub process_parameters {
 			}
 		}
 	}
+	if (! -d $opt{tmpdir}) {
+		mkdir $opt{tmpdir} || debug(0,"mkdir $opt{tmpdir} failed:$!");
+		if (! -d $opt{tmpdir}) {
+			return $UNKNOWN if (defined($opt{delta}));
+		}
+	}
 	if ($opt{type} eq "delta") {
 		#--- create tmpfile name from 1. tag 2. command 3. expressions
 		$opt{tmpfile}=$opt{name} . "_" . $opt{execute};
@@ -189,14 +196,7 @@ sub process_parameters {
 			debug(2, "process_parameter: old_timestamp:$cmd{old_timestamp} old_output:$cmd{old_output}");
 		}
 		#--- remove old files in tmpdir older than one day
-		&garbage_collection(24*60*60);
-	}
-	if (! -d $opt{tmpdir}) {
-		mkdir $opt{tmpdir};
-		if (! -d $opt{tmpdir}) {
-			print  "mkdir $opt{tmpdir} failed:$!";
-			return $UNKNOWN if (defined($opt{delta}));
-		}
+		&garbage_collection($opt{maxage});
 	}
 	debug(2, "verbosity:$opt{verbose}");
 	return $OK;
@@ -238,7 +238,7 @@ Options:
    timeout for one command, default: $opt{timeout}
 -d, --tmpdir
    specify directory for tmpfiles, default: $opt{tmpdir}
-   (caveat: garbage collection is done in this directory)
+   (garbage collection for files \'${MYSELF}*\' removes files older than )
 -v, --verbose
    increase verbosity (can be called multiple), default: $opt{verbose}
 -h, --help
@@ -412,12 +412,15 @@ sub get_tmpfile {
 #---
 sub garbage_collection {
 	my $interval=shift;
-	opendir(DIR, $opt{tmpdir}) or die "can't opendir $opt{tmpdir}: $!";
+	opendir(DIR, $opt{tmpdir}) or die "garbage_collection: cannot open directory $opt{tmpdir}: $!";
 	while (defined(my $filename = readdir(DIR))) {
+		#--- basic security against weak tmpdirs: delete only files beginning with $MYSELF
 		next if ($filename!~/^$MYSELF/);
 		my $mtime=(stat("$opt{tmpdir}/$filename"))[9];
-		unlink "$opt{tmpdir}/$filename" if (time-$mtime>$interval);
-		debug(2,"tried to remove $opt{tmpdir}/$filename");
+		if (time-$mtime>($interval*60*60)) {
+			debug(2, sprintf("garbage collection: removing %d hours old $opt{tmpdir}/$filename", (time-$mtime)/(60*60)));
+			unlink "$opt{tmpdir}/$filename";
+		}
 	}
 	closedir(DIR);
 }
@@ -436,8 +439,8 @@ sub exec_command {
 		alarm($opt{timeout});
 
 		#--- prepare tmpfiles for stdout and stderr
-		$tmp_stdout=&get_tmpfile("/tmp", "${MYSELF}_stdout_$$");
-		$tmp_stderr=&get_tmpfile("/tmp", "${MYSELF}_stderr_$$");
+		$tmp_stdout=&get_tmpfile($opt{tmpdir}, "${MYSELF}_stdout_$$");
+		$tmp_stderr=&get_tmpfile($opt{tmpdir}, "${MYSELF}_stderr_$$");
 
 		#--- execute command and store stdout/stderr/return code
 		`$cmd{command} 1>$tmp_stdout 2>$tmp_stderr`;
@@ -448,7 +451,7 @@ sub exec_command {
 		$cmd{output}=readfile($tmp_stdout);
 		$cmd{stderr}=readfile($tmp_stderr);
 		unlink $tmp_stdout, $tmp_stderr;
-		debug(1, "exec_command: output:>" . squeeze($cmd{output},"both",80) . "< stderr:>" . squeeze($cmd{stderr},"both",80) . "<");
+		debug(3, "exec_command: raw output:>" . squeeze($cmd{output},"both",80) . "< raw stderr:>" . squeeze($cmd{stderr},"both",80) . "<");
 
 		#--- unknown return code? change it explicitly to UNKNOWN
 		if (!defined($rc{r2s}{$cmd{rc}})) {
@@ -457,6 +460,7 @@ sub exec_command {
 		}
 		
 		#--- remove white chars from output
+		chomp $cmd{output};
 		#$cmd{output}=~s/\n/\\n/mg;
 		#$cmd{output}=mytrim($cmd{output},"\\n\\s");
 		#$cmd{stderr}=mytrim($cmd{stderr},"\\n\\s");
@@ -510,9 +514,8 @@ sub do_analysis {
 			}
 		} else {
 			writefile("$opt{tmpdir}/$opt{tmpfile}", "$cmd{timestamp} $cmd{output}");
-			print "$opt{name} UNKNOWN - cmd $cmd{command}: " . 
-				squeeze($cmd{output},"left",80) . 
-				" [" . squeeze($cmd{stderr},"left",80) . "no previous output available\n";
+			$cmd{result}=squeeze($cmd{output},"left",80);
+			$cmd{match}="[ delta: no previous output available ]";
                 	return $UNKNOWN;
 		}
 	}
@@ -556,18 +559,38 @@ sub do_analysis {
 	}
 	return $returncode;
 }
+
+#---
+#---
+#---
 sub do_report {
 	my $cmd=shift;	
+
+	foreach my $var ('$opt{name}','$rc{rc}','$rc{label}{$rc{rc}}','$cmd{result}','$cmd{match}','$cmd{matchlist}') {
+		defined_var("do_report",$var);
+	}
 	#--- report results
 	printf "%s %s - result:%s match:%s %s",
 		$opt{name},
 		$rc{label}{$rc{rc}},
-		$cmd{result},
-		$cmd{match},
+		defined($cmd{result}) ? $cmd{result} : "[...]",
+		defined($cmd{match}) ? $cmd{match} : "[...]",
 		(@{$cmd{matchlist}}) ? "severities:" . join(',',@{$cmd{matchlist}}) : "";
 	printf "|%s=%s", $opt{performance}, squeeze($cmd{output},"left",80) if ($opt{performance});
 	printf "\n";
 }
+#
+#
+#
+sub defined_var {
+	my ($prefix,$var)=@_;
+	if (! eval "defined($var)") {
+		debug(0,"$prefix: var $var is not defined");
+		return 0;
+	}
+	return 1;
+}
+
 #-------------------------------------------------------------------------------
 #--- main ----------------------------------------------------------------------
 #-------------------------------------------------------------------------------
