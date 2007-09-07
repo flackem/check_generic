@@ -1,8 +1,0 @@
-
-===== Changelog =====
-
-  *0.0.1*        7.09.2007
-  	* added lots of documentation on my-plugin.de
-        * added garbage_collection to remove obsolete delta files
-        * fixed numerical output 
-        * added match_env to report string matches
