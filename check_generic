@@ -392,11 +392,11 @@ sub get_tmpfile {
 	my $tmpfile="";
 	#--- check existance of path and create it if necessary
 	if (! -d $path && ! mkdir($path,0700)) {
-		add_error("get_tmpfile: error creating tmp_path $path:$!");
+		die("get_tmpfile: error creating tmp_path $path:$!");
 		return "";
 	}
 	#--- do 5 attempts to create tmpfile
-	while ($attempt++ < 5) {
+	while (++$attempt <= 5) {
 		my $suffix=int(rand(89999))+10000;
 		$tmpfile="$path/$prefix.$suffix";
 		next if (-f $tmpfile);
@@ -405,7 +405,7 @@ sub get_tmpfile {
 			return $tmpfile;
 		}
 	}
-	add_error("get_tmpfile: giving up opening $tmpfile after $attempt attempts:$!");
+	die("get_tmpfile: giving up opening $tmpfile:$!");
 	return "";
 }
 
