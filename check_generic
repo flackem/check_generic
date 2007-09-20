@@ -587,12 +587,13 @@ sub do_report {
 		defined_var("do_report",$var);
 	}
 	#--- report results
-	printf "%s %s - result:%s match:%s %s",
+	my $report_output=sprintf "%s %s - result:%s match:%s %s",
 		$opt{name},
 		$rc{label}{$rc{rc}},
 		defined($cmd{result}) ? $cmd{result} : "[...]",
 		defined($cmd{match}) ? $cmd{match} : "[...]",
 		(@{$cmd{matchlist}}) ? "severities:" . join(',',@{$cmd{matchlist}}) : "";
+	print $report_output=~s/\|/_/g;
 	printf "|%s=%s", $opt{performance}, squeeze($cmd{output},"left",80) if ($opt{performance});
 	printf "\n";
 }
