@@ -371,6 +371,15 @@ sub mytrim {
 }
 
 #---
+#---
+#---
+sub mysubst {
+	my ($src,$pattern,$substitution)=@_;
+	$src=~s/$pattern/$substitution/g;
+	return $src;
+}
+
+#---
 #--- substitute macros a la $HOSTNAME$ from environment
 #---
 sub substitute_macros {
@@ -508,9 +517,12 @@ sub do_analysis {
 		}
 	} else {
 		if ($cmd{rc} != 0) {
-			print "$opt{name} UNKNOWN - cmd $cmd{command}: " .
-				squeeze($cmd{output},"left",80) .
-				" [" . squeeze($cmd{stderr},"left",80) . "]\n";
+			printf "%s UNKNOWN - cmd %s: %s [%s]\n",
+				$opt{name},
+				# replace | with PIPE to avoid perfdata problems
+				mysubst($cmd{command},"\\|","PIPE"),	
+				squeeze($cmd{output},"left",80),
+				squeeze($cmd{stderr},"left",80);
 			return $UNKNOWN;
 		}
 	} 
@@ -593,7 +605,7 @@ sub do_report {
 		defined($cmd{result}) ? $cmd{result} : "[...]",
 		defined($cmd{match}) ? $cmd{match} : "[...]",
 		(@{$cmd{matchlist}}) ? "severities:" . join(',',@{$cmd{matchlist}}) : "";
-	print $report_output=~s/\|/_/g;
+	print mysubst($report_output,"\\|","PIPE");
 	printf "|%s=%s", $opt{performance}, squeeze($cmd{output},"left",80) if ($opt{performance});
 	printf "\n";
 }
