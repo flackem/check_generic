@@ -315,11 +315,11 @@ sub match_env {
         my $total="";
         my $cute_little_proc="if (\'${string}\'${expr}) { \@match=(\$\`,\$\&,\$\'); }";
         my $rc=eval($cute_little_proc);
-	print "match_env: cute_little_proc:$cute_little_proc\n";
-	print "match_env: string:$string expr:$expr wanted_length:$wanted_length rc eval:$rc eval:$@\n";
+	#print "match_env: cute_little_proc:$cute_little_proc\n";
+	#print "match_env: string:$string expr:$expr wanted_length:$wanted_length rc eval:$rc eval:$@\n";
         for my $i (0..$#match) {
                 $len[$i]=length($match[$i]);
-                print "match $i: $match[$i] ($len[$i])\n";
+                #print "match $i: $match[$i] ($len[$i])\n";
         }
 	return	squeeze($match[0],"right",$wanted_length/3) . 
 		squeeze($match[1],"middle",$wanted_length/3) . 
