@@ -477,6 +477,7 @@ sub exec_command {
 		
 		#--- remove white chars from output
 		chomp $cmd{output};
+		$cmd{output}=~s/'//mg;
 		#$cmd{output}=~s/\n/\\n/mg;
 		#$cmd{output}=mytrim($cmd{output},"\\n\\s");
 		#$cmd{stderr}=mytrim($cmd{stderr},"\\n\\s");
