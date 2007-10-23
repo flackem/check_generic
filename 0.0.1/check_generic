@@ -78,6 +78,7 @@ $DETAIL_PERFORMANCE=8;
 
 my %opt=(
 	"configfile"	=> "",
+	"ignore_rc"	=> 0,
 	"libexec"	=> "/usr/local/nagios/libexec",
 	"maxage"	=> 24, #hours
 	"name"		=> "CHANGEME",
@@ -105,6 +106,7 @@ sub process_parameters {
 		"d|tmpdir=s"	=> \$opt{tmpdir},
 		"e|execute=s"	=> \$opt{execute},
 		"h|help"	=> \$opt{help},
+		"i|ignore_rc"	=> \$opt{ignore_rc},
 		"n|name=s"	=> \$opt{name},
 		"o|ok=s"	=> \$opt{ok},
 		"p|performance=s" => \$opt{performance},
@@ -232,6 +234,9 @@ Options:
    default: complement of state
 -y, --type [SCALAR,ARRAY,DELTA]
    type of data value
+-i, --ignore_rc
+	normally the return code of the command executed is taken into account
+   use this option to explicitly ignore it, default: $opt{ignore_rc}
 -n, --name
    plugin name (shown in output), default: $opt{name}
 -t, --timeout
@@ -310,11 +315,11 @@ sub match_env {
         my $total="";
         my $cute_little_proc="if (\'${string}\'${expr}) { \@match=(\$\`,\$\&,\$\'); }";
         my $rc=eval($cute_little_proc);
-	print "match_env: cute_little_proc:$cute_little_proc\n";
-	print "match_env: string:$string expr:$expr wanted_length:$wanted_length rc eval:$rc eval:$@\n";
+	#print "match_env: cute_little_proc:$cute_little_proc\n";
+	#print "match_env: string:$string expr:$expr wanted_length:$wanted_length rc eval:$rc eval:$@\n";
         for my $i (0..$#match) {
                 $len[$i]=length($match[$i]);
-                print "match $i: $match[$i] ($len[$i])\n";
+                #print "match $i: $match[$i] ($len[$i])\n";
         }
 	return	squeeze($match[0],"right",$wanted_length/3) . 
 		squeeze($match[1],"middle",$wanted_length/3) . 
@@ -366,6 +371,15 @@ sub mytrim {
 }
 
 #---
+#---
+#---
+sub mysubst {
+	my ($src,$pattern,$substitution)=@_;
+	$src=~s/$pattern/$substitution/g;
+	return $src;
+}
+
+#---
 #--- substitute macros a la $HOSTNAME$ from environment
 #---
 sub substitute_macros {
@@ -392,11 +406,11 @@ sub get_tmpfile {
 	my $tmpfile="";
 	#--- check existance of path and create it if necessary
 	if (! -d $path && ! mkdir($path,0700)) {
-		add_error("get_tmpfile: error creating tmp_path $path:$!");
+		die("get_tmpfile: error creating tmp_path $path:$!");
 		return "";
 	}
 	#--- do 5 attempts to create tmpfile
-	while ($attempt++ < 5) {
+	while (++$attempt <= 5) {
 		my $suffix=int(rand(89999))+10000;
 		$tmpfile="$path/$prefix.$suffix";
 		next if (-f $tmpfile);
@@ -405,7 +419,7 @@ sub get_tmpfile {
 			return $tmpfile;
 		}
 	}
-	add_error("get_tmpfile: giving up opening $tmpfile after $attempt attempts:$!");
+	die("get_tmpfile: giving up opening $tmpfile:$!");
 	return "";
 }
 
@@ -463,6 +477,7 @@ sub exec_command {
 		
 		#--- remove white chars from output
 		chomp $cmd{output};
+		$cmd{output}=~s/'//mg;
 		#$cmd{output}=~s/\n/\\n/mg;
 		#$cmd{output}=mytrim($cmd{output},"\\n\\s");
 		#$cmd{stderr}=mytrim($cmd{stderr},"\\n\\s");
@@ -497,12 +512,21 @@ sub do_analysis {
 	my $returncode=$rc{number}{$opt{false}};
 
 	#--- first: check return code
-	if ($cmd{rc} != 0) {
-		print "$opt{name} UNKNOWN - cmd $cmd{command}: " .
-			squeeze($cmd{output},"left",80) .
-			" [" . squeeze($cmd{stderr},"left",80) . "]\n";
-		return $UNKNOWN;
-	}
+	if ($opt{ignore_rc}) {
+		if ($cmd{rc} != 0) {
+			debug(2, "do_analysis: ignoring error return code $cmd{rc}");
+		}
+	} else {
+		if ($cmd{rc} != 0) {
+			printf "%s UNKNOWN - cmd %s: %s [%s]\n",
+				$opt{name},
+				# replace | with PIPE to avoid perfdata problems
+				mysubst($cmd{command},"\\|","PIPE"),	
+				squeeze($cmd{output},"left",80),
+				squeeze($cmd{stderr},"left",80);
+			return $UNKNOWN;
+		}
+	} 
 
 	#--- check type
 	if ($opt{type} eq "delta") {
@@ -576,12 +600,13 @@ sub do_report {
 		defined_var("do_report",$var);
 	}
 	#--- report results
-	printf "%s %s - result:%s match:%s %s",
+	my $report_output=sprintf "%s %s - result:%s match:%s %s",
 		$opt{name},
 		$rc{label}{$rc{rc}},
 		defined($cmd{result}) ? $cmd{result} : "[...]",
 		defined($cmd{match}) ? $cmd{match} : "[...]",
 		(@{$cmd{matchlist}}) ? "severities:" . join(',',@{$cmd{matchlist}}) : "";
+	print mysubst($report_output,"\\|","PIPE");
 	printf "|%s=%s", $opt{performance}, squeeze($cmd{output},"left",80) if ($opt{performance});
 	printf "\n";
 }
