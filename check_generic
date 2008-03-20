@@ -150,7 +150,7 @@ sub process_parameters {
 		foreach my $state (reverse @{$rc{textsev}}) {
 			if (defined($opt{$state})) {
 				$opt{string}=is_string_cmp($opt{$state});
-				debug(3,"process_parameters: state $state defined:$opt{$state}, text evaluation:$opt{string}");
+				debug(3,"process_parameters: state $state defined:$opt{$state}, is_string:$opt{string}");
 			} else {
 				debug(3,"process_parameters: state $state not defined");
 			}
@@ -188,19 +188,19 @@ sub process_parameters {
 		}
 		$opt{tmpfile}=~s/\W/_/g;
 		$opt{tmpfile}="$MYSELF.$opt{tmpfile}.tmp";
-		debug(2, "process_parameter: tmpfile:$opt{tmpfile}");
+		debug(2, "process_parameters: tmpfile:$opt{tmpfile}");
 		
 		#--- read content of old tmpfile if available
 		my $content=readfile("$opt{tmpdir}/$opt{tmpfile}");
 		if ($content ne "") {
 			chomp $content;
 			($cmd{old_timestamp},$cmd{old_output})=split(/\s+/,$content);
-			debug(2, "process_parameter: old_timestamp:$cmd{old_timestamp} old_output:$cmd{old_output}");
+			debug(2, "process_parameters: old_timestamp:$cmd{old_timestamp} old_output:$cmd{old_output}");
 		}
 		#--- remove old files in tmpdir older than one day
 		&garbage_collection($opt{maxage});
 	}
-	debug(2, "verbosity:$opt{verbose}");
+	debug(2, "process_parameters: verbosity:$opt{verbose}");
 	return $OK;
 }
 
@@ -467,7 +467,8 @@ sub exec_command {
 		$cmd{output}=readfile($tmp_stdout);
 		$cmd{stderr}=readfile($tmp_stderr);
 		unlink $tmp_stdout, $tmp_stderr;
-		debug(3, "exec_command: raw output:>" . squeeze($cmd{output},"both",80) . "< raw stderr:>" . squeeze($cmd{stderr},"both",80) . "<");
+		debug(3, "exec_command: raw output:>" . squeeze($cmd{output},"both",80) . "<");
+		debug(3, "exec_command: raw stderr:>" . squeeze($cmd{stderr},"both",80) . "<");
 
 		#--- unknown return code? change it explicitly to UNKNOWN
 		if (!defined($rc{r2s}{$cmd{rc}})) {
@@ -517,14 +518,20 @@ sub do_analysis {
 			debug(2, "do_analysis: ignoring error return code $cmd{rc}");
 		}
 	} else {
+		#debug(2, "do_analysis: checking return code $cmd{rc}");
 		if ($cmd{rc} != 0) {
-			printf "%s UNKNOWN - cmd %s: %s [%s]\n",
-				$opt{name},
-				# replace | with PIPE to avoid perfdata problems
-				mysubst($cmd{command},"\\|","PIPE"),	
-				squeeze($cmd{output},"left",80),
-				squeeze($cmd{stderr},"left",80);
+			debug(2, "do_analysis: return code $cmd{rc} != OK - returning UNKNOWN");
+			$cmd{result}="RC$cmd{rc} output:" . squeeze($cmd{output},"left",80);
+			$cmd{match}="RC!=OK";
+			#printf "%s UNKNOWN - cmd %s: %s [%s]\n",
+				#$opt{name},
+				## replace | with PIPE to avoid perfdata problems
+				#mysubst($cmd{command},"\\|","PIPE"),	
+				#squeeze($cmd{output},"left",80),
+				#squeeze($cmd{stderr},"left",80);
 			return $UNKNOWN;
+		} else {
+			debug(2, "do_analysis: return code $cmd{rc} is OK, continuing with analysis");
 		}
 	} 
 
@@ -564,9 +571,10 @@ sub do_analysis {
 	foreach my $severity (@{$rc{textsev}}) {
 
 		if (defined($opt{$severity})) {
+			debug(2,"do_analysis: severity $severity defined:$opt{$severity}");
 			my $expression="\'$cmd{output}\'$opt{$severity}";
-			debug(2,"do_analysis: evaluate expression for severity $severity >\'" . squeeze($cmd{output},"left",80) . 
-				"\'" . squeeze($opt{$severity},"both",80)."<");
+			debug(2,"do_analysis: evaluate expression for severity $severity >" . squeeze($cmd{output},"left",80) . 
+				squeeze($opt{$severity},"both",80)."<");
 			#--- can be numerical or string evaluation
 			if (eval($expression)) {
 				$cmd{match}=$opt{$severity};
@@ -581,10 +589,12 @@ sub do_analysis {
 				debug(2,"do_analysis: eval was successful rc:$returncode result:\'$cmd{result}\' match:\'$cmd{match}\'");
 			} else {
 				$cmd{result}=squeeze($cmd{output},"both",80);
-				debug(2,"do_analysis: eval was *not* successful rc:$returncode severity:$severity expression:>\'" . 
-					squeeze($cmd{output},"both",80) . "\'$opt{$severity}<");
+				debug(2,"do_analysis: eval was *not* successful rc:$returncode severity:$severity expression:>" . 
+					squeeze($cmd{output},"both",80) . "$opt{$severity}<");
 			}
 			
+		} else {
+			debug(2,"do_analysis: severity $severity not defined -> continue");
 		}
 	}
 	return $returncode;
