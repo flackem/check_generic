@@ -600,9 +600,6 @@ sub do_analysis {
 	return $returncode;
 }
 
-#---
-#---
-#---
 sub do_report {
 	my $cmd=shift;	
 
@@ -616,13 +613,16 @@ sub do_report {
 		defined($cmd{result}) ? $cmd{result} : "[...]",
 		defined($cmd{match}) ? $cmd{match} : "[...]",
 		(@{$cmd{matchlist}}) ? "severities:" . join(',',@{$cmd{matchlist}}) : "";
+	#--- add errors if encountered
+	$report_output.=" [" . join(", ",@{$rc{error}}) . "]" if (defined($rc{error}[0]));
+
+	#--- replace all '|' with PIPE
 	print mysubst($report_output,"\\|","PIPE");
+
 	printf "|%s=%s", $opt{performance}, squeeze($cmd{output},"left",80) if ($opt{performance});
 	printf "\n";
 }
-#
-#
-#
+
 sub defined_var {
 	my ($prefix,$var)=@_;
 	if (! eval "defined($var)") {
@@ -640,6 +640,9 @@ sub defined_var {
 if (&process_parameters != $OK) {
 	exit $UNKNOWN;
 }
+
+#--- don't run this as root ;-)
+add_error("please don't run plugins as root!") if ($> == 0);
 
 #--- initialize timer for overall timeout
 $rc{starttime}=time;
