@@ -363,6 +363,13 @@ sub is_valid_regex {
 }
 
 #---
+#--- taken from Perl Cookbook ;-)
+#---
+sub is_integer {
+    my $number = shift;
+    return eval { $number=~/^[+-]?\d+$/; 1 } || 0;
+}
+#---
 #--- trim input string if found any chars from trim string
 #---
 sub mytrim {
@@ -539,6 +546,7 @@ sub do_analysis {
 	if ($opt{type} eq "delta") {
 		if (defined($cmd{old_timestamp}) && $cmd{old_timestamp} > 0) {
 			$cmd{elapsed_seconds}=$cmd{timestamp}-$cmd{old_timestamp};
+			$cmd{org_output}=$cmd{output};
 			$cmd{delta}=$cmd{output}-$cmd{old_output};
 			writefile("$opt{tmpdir}/$opt{tmpfile}", "$cmd{timestamp} $cmd{output}");
 			debug(2, "do_analysis: elapsed_seconds:$cmd{elapsed_seconds} delta:$cmd{delta}");
@@ -612,7 +620,13 @@ sub do_report {
 		$rc{label}{$rc{rc}},
 		defined($cmd{result}) ? $cmd{result} : "[...]",
 		defined($cmd{match}) ? $cmd{match} : "[...]",
-		(@{$cmd{matchlist}}) ? "severities:" . join(',',@{$cmd{matchlist}}) : "";
+		(@{$cmd{matchlist}}) ? "severities:" . join(',',@{$cmd{matchlist}}) . " " : "";
+
+	#--- if delta specified, print old and new value
+	if ($opt{type} eq "delta") {
+		my $format = (is_integer($cmd{org_output})) ?  "old:%d new:%d time:%lds" : "old:%f new:%f time period:%lds";
+		$report_output.= sprintf $format, $cmd{old_output}, $cmd{org_output}, $cmd{elapsed_seconds};
+	}
 	#--- add errors if encountered
 	$report_output.=" [" . join(", ",@{$rc{error}}) . "]" if (defined($rc{error}[0]));
 
