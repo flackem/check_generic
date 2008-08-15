@@ -623,7 +623,11 @@ sub do_report {
 		(@{$cmd{matchlist}}) ? "severities:" . join(',',@{$cmd{matchlist}}) . " " : "";
 
 	#--- if delta specified, print old and new value
-	if ($opt{type} eq "delta") {
+	if (	$opt{type} eq "delta" && 
+		defined($cmd{old_output}) && 
+		defined($cmd{org_output}) && 
+		defined($cmd{elapsed_seconds})) {
+
 		my $format = (is_integer($cmd{org_output})) ?  "old:%d new:%d time:%lds" : "old:%f new:%f time period:%lds";
 		$report_output.= sprintf $format, $cmd{old_output}, $cmd{org_output}, $cmd{elapsed_seconds};
 	}
