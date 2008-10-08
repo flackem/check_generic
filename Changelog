@@ -1,5 +1,7 @@
 ===== Changelog =====
 
+  * omit 'match:none' if no threshold was hit
+  * delta mode: print old and new value plus time
   * added "don't run as root" msg
   * better messaging for RC != 0
   * escaped "'" to avoid eval errors

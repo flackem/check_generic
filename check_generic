@@ -615,12 +615,20 @@ sub do_report {
 		defined_var("do_report",$var);
 	}
 	#--- report results
-	my $report_output=sprintf "%s %s - result:%s match:%s %s",
+	my $report_output=sprintf "%s %s - result:%s %s %s",
 		$opt{name},
 		$rc{label}{$rc{rc}},
-		defined($cmd{result}) ? $cmd{result} : "[...]",
-		defined($cmd{match}) ? $cmd{match} : "[...]",
-		(@{$cmd{matchlist}}) ? "severities:" . join(',',@{$cmd{matchlist}}) . " " : "";
+		defined($cmd{result}) 
+			? $cmd{result} 
+			: "[...]",
+		defined($cmd{match})
+			?  ($cmd{match} eq "none") 
+				? "" 
+				: "match:$cmd{match}"
+			: "match:[...]",
+		(@{$cmd{matchlist}}) 
+			? "severities:" . join(',',@{$cmd{matchlist}}) . " " 
+			: "";
 
 	#--- if delta specified, print old and new value
 	if (	$opt{type} eq "delta" && 
