@@ -210,6 +210,8 @@ print <<SHORTEOF;
 $MYSELF -e <cmdline> -o|u|w|c <expression> [-f false_state] [-n name] [-t timeout] [-r level]
 $MYSELF [-h | --help]
 $MYSELF [-V | --version]
+
+[ more info on http://my-plugin.de/check_generic ]
 SHORTEOF
 }
 
