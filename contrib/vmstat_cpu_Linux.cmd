@@ -28,11 +28,13 @@
 #   1252070319 boot time
 #      1159607 forks
 #
-# check_multi call: check_multi -f cpu.cmd -r 39
+# check_multi call: check_multi -f vmstat_cpu_Linux.cmd -r 39
 #
-command [ cpu_idle ] = check_generic -n "cpu_idle" -e "vmstat -s | grep 'idle cpu ticks' | awk '{print \$1}'" -c '>99' -y delta -p "cpu_idle"
-command [ cpu_iowait ] = check_generic -n "cpu_iowait" -e "vmstat -s | grep 'IO-wait cpu ticks' | awk '{print \$1}'" -c '>99' -y delta -p "cpu_iowait"
-command [ cpu_irq ] = check_generic -n "cpu_irq" -e "vmstat -s | grep 'IRQ cpu ticks' | awk '{print \$1}'" -c '>99' -y delta -p "cpu_irq"
-command [ cpu_system ] = check_generic -n "cpu_system" -e "vmstat -s | grep 'system cpu ticks' | awk '{print \$1}'" -c '>99' -y delta -p "cpu_system"
-command [ cpu_non_nice_user ] = check_generic -n "cpu_non_nice_user" -e "vmstat -s | grep 'non-nice user cpu ticks' | awk '{print \$1}'" -c '>99' -y delta -p "cpu_non_nice_user"
-command [ cpu_nice_user ] = check_generic -n "cpu_nice_user" -e "vmstat -s | grep '[^n][^-]nice user cpu ticks' | awk '{print \$1}'" -c '>99' -y delta -p "cpu_nice_user"
+command [ cpu_non_nice_user ] =check_generic -n "cpu_non_nice_user" -e "vmstat -s | grep 'non-nice user cpu ticks' | awk '{print \$1}'" -c '>90' -y delta -p "cpu_non_nice_user"
+command [ cpu_nice_user ] = check_generic -n "cpu_nice_user" -e "vmstat -s | grep '[^n][^-]nice user cpu ticks' | awk '{print \$1}'" -c '>90' -y delta -p "cpu_nice_user"
+command [ cpu_system ] = check_generic -n "cpu_system" -e "vmstat -s | grep 'system cpu ticks' | awk '{print \$1}'" -c '>90' -y delta -p "cpu_system"
+command [ cpu_iowait ] = check_generic -n "cpu_iowait" -e "vmstat -s | grep 'IO-wait cpu ticks' | awk '{print \$1}'" -c '>50' -y delta -p "cpu_iowait"
+command [ cpu_irq ] = check_generic -n "cpu_irq" -e "vmstat -s | grep 'IRQ cpu ticks' | awk '{print \$1}'" -c '>5' -y delta -p "cpu_irq"
+command [ cpu_softirq ] = check_generic -n "cpu_softirq" -e "vmstat -s | grep 'softirq cpu ticks' | awk '{print \$1}'" -c '>5' -y delta -p "cpu_softirq"
+command [ cpu_stolen ] = check_generic -n "cpu_stolen" -e "vmstat -s | grep 'stolen cpu ticks' | awk '{print \$1}'" -c '>1' -y delta -p "cpu_stolen"
+command [ cpu_idle ] = check_generic -n "cpu_idle" -e "vmstat -s | grep 'idle cpu ticks' | awk '{print \$1}'" -c '<2' -y delta -p "cpu_idle"
