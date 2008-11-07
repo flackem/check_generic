@@ -1,5 +1,6 @@
 ===== Changelog =====
 
+  * performance data help added
   * added http://my-plugin/check_generic to help
   * omit 'match:none' if no threshold was hit
   * delta mode: print old and new value plus time

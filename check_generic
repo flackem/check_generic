@@ -242,6 +242,8 @@ Options:
 -d, --tmpdir
    specify directory for tmpfiles, default: $opt{tmpdir}
    (garbage collection for files \'${MYSELF}*\' removes files older than )
+-p, --performance <tag>
+   provide returned data as performance data with name <tag>
 -v, --verbose
    increase verbosity (can be called multiple), default: $opt{verbose}
 -h, --help
