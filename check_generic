@@ -75,6 +75,7 @@ $DETAIL_PERFORMANCE=8;
 my %opt=(
 	"configfile"	=> "",
 	"ignore_rc"	=> 0,
+	"empty_output_is_ok"	=> 0,
 	"libexec"	=> "/usr/local/nagios/libexec",
 	"maxage"	=> 24, #hours
 	"name"		=> "CHANGEME",
@@ -103,6 +104,7 @@ sub process_parameters {
 		"e|execute=s"	=> \$opt{execute},
 		"h|help"	=> \$opt{help},
 		"i|ignore_rc"	=> \$opt{ignore_rc},
+		"empty_output_is_ok"	=> \$opt{empty_output_is_ok},
 		"n|name=s"	=> \$opt{name},
 		"o|ok=s"	=> \$opt{ok},
 		"p|performance=s" => \$opt{performance},
@@ -232,8 +234,11 @@ Options:
    default: complement of state
 -y, --type [SCALAR,ARRAY,DELTA]
    type of data value
+--empty_output_is_ok
+   If there is no execution output the RC of check_generic is UNKNOWN.
+   Use this option if you expect empty output as a normal result.
 -i, --ignore_rc
-	normally the return code of the command executed is taken into account
+   Normally the return code of the command executed is taken into account.
    use this option to explicitly ignore it, default: $opt{ignore_rc}
 -n, --name
    plugin name (shown in output), default: $opt{name}
@@ -543,7 +548,7 @@ sub do_analysis {
 	} 
 
 	#--- second: if empty output, something's wrong. return UNKNOWN
-	if ($cmd{output}eq "") {
+	if ($cmd{output}eq "" && !$opt{empty_output_is_ok}) {
 		debug(2, "do_analysis: output is empty - returning UNKNOWN");
 		$cmd{result}="output is empty";
 		$cmd{match}="none";

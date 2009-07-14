@@ -1,5 +1,6 @@
 ===== Changelog =====
 
+  * option empty_output_is_ok to avoid UNKNOWN
   * if execution output is empty: return UNKNOWN
   * performance data help added
   * added http://my-plugin/check_generic to help
