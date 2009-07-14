@@ -542,6 +542,14 @@ sub do_analysis {
 		}
 	} 
 
+	#--- second: if empty output, something's wrong. return UNKNOWN
+	if ($cmd{output}eq "") {
+		debug(2, "do_analysis: output is empty - returning UNKNOWN");
+		$cmd{result}="output is empty";
+		$cmd{match}="none";
+		return $UNKNOWN;
+	}
+
 	#--- check type
 	if ($opt{type} eq "delta") {
 		if (defined($cmd{old_timestamp}) && $cmd{old_timestamp} > 0) {

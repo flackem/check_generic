@@ -1,5 +1,6 @@
 ===== Changelog =====
 
+  * if execution output is empty: return UNKNOWN
   * performance data help added
   * added http://my-plugin/check_generic to help
   * omit 'match:none' if no threshold was hit
