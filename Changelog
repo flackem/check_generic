@@ -1,5 +1,6 @@
 ===== Changelog =====
 
+  * added warn;crit parts to performance data
   * option empty_output_is_ok to avoid UNKNOWN
   * if execution output is empty: return UNKNOWN
   * performance data help added

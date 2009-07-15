@@ -490,7 +490,7 @@ sub exec_command {
 		
 		#--- remove white chars from output
 		chomp $cmd{output};
-		$cmd{output}=~s/'//mg;
+		$cmd{output}=~s/['"]*//mg;
 		#$cmd{output}=~s/\n/\\n/mg;
 		#$cmd{output}=mytrim($cmd{output},"\\n\\s");
 		#$cmd{stderr}=mytrim($cmd{stderr},"\\n\\s");
@@ -504,7 +504,7 @@ sub exec_command {
 	if ($@) {
 		#--- timeout encountered: store status
 		if ($@ =~ /timeout/) {
-			$cmd{output}="UNKNOWN - \'$command\' cancelled after timeout ($opt{timeout}s)";
+			$cmd{output}="UNKNOWN - command cancelled after timeout ($opt{timeout}s)";
 			$cmd{rc}=$UNKNOWN;
 		#--- catchall for unknown errors
 		} else {
@@ -658,14 +658,26 @@ sub do_report {
 	#--- replace all '|' with PIPE
 	print mysubst($report_output,"\\|","PIPE");
 
-	printf "|%s=%s", $opt{performance}, squeeze($cmd{output},"left",80) if ($opt{performance});
+	if ($opt{performance}) {
+		my $warn=0;
+		my $crit=0;
+		$warn=$1 if ($opt{warning}=~ /([-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)/);
+		$crit=$1 if ($opt{critical}=~/([-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)/);
+
+		# 'label'=value[UOM];[warn];[crit];[min];[max]
+		if ($warn || $crit) {
+			printf "|%s=%s;%f;%f;;;", $opt{performance}, squeeze($cmd{output},"left",80),$warn,$crit; 
+		} else {
+			printf "|%s=%s", $opt{performance}, squeeze($cmd{output},"left",80) 
+		}
+	}
 	printf "\n";
 }
 
 sub defined_var {
 	my ($prefix,$var)=@_;
 	if (! eval "defined($var)") {
-		debug(0,"$prefix: var $var is not defined");
+		debug(1,"$prefix: var $var is not defined");
 		return 0;
 	}
 	return 1;
