@@ -80,7 +80,7 @@ my %opt=(
 	"maxage"	=> 24, #hours
 	"match_stderr"	=> 0,
 	"match_is_output" => 0,
-	"name"		=> "CHANGEME",
+	"name"		=> undef,
 	"performance"	=> undef,
 	"report"	=> 15,
 	"string"	=> {},
@@ -653,15 +653,15 @@ sub do_report {
 		} else {
 			$output=($opt{match_stderr})?"$cmd{output}$cmd{stderr}":"$cmd{output}";
 		}
-		$report_output=sprintf "%s %s - %s", 
-			$opt{name},
+		$report_output=sprintf "%s%s - %s", 
+			($opt{name}) ? "$opt{name} " : "",
 			$rc{label}{$rc{rc}},
 			$output;
 
 	#--- print standard stuff 
 	} else {
-		$report_output=sprintf "%s %s - result:%s %s %s",
-			$opt{name},
+		$report_output=sprintf "%s%s - result:%s %s %s",
+			($opt{name}) ? "$opt{name} " : "",
 			$rc{label}{$rc{rc}},
 			defined($cmd{result}) 
 				? $cmd{result} 
