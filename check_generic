@@ -482,7 +482,7 @@ sub exec_command {
 
 		#--- unknown return code? change it explicitly to UNKNOWN
 		if (!defined($rc{r2s}{$cmd{rc}})) {
-			$cmd{stderr}.=" RC was $cmd{no}{rc}!";
+			$cmd{stderr}.=" RC was $cmd{rc}!";
 			$cmd{rc}=$UNKNOWN;
 		}
 		
@@ -533,12 +533,13 @@ sub do_analysis {
 			debug(2, "do_analysis: return code $cmd{rc} != OK - returning UNKNOWN");
 			$cmd{result}="RC$cmd{rc} output:" . squeeze($cmd{output},"left",80);
 			$cmd{match}="RC!=OK";
-			#printf "%s UNKNOWN - cmd %s: %s [%s]\n",
-				#$opt{name},
-				## replace | with PIPE to avoid perfdata problems
-				#mysubst($cmd{command},"\\|","PIPE"),	
-				#squeeze($cmd{output},"left",80),
-				#squeeze($cmd{stderr},"left",80);
+
+			#--- provide some error message if RC != OK
+			if (! $opt{match_stderr} && $cmd{stderr}) {
+				add_error($cmd{stderr});
+			} elsif ($opt{match_stderr} && $cmd{stderr} && ! $cmd{output}) {
+				add_error($cmd{stderr});
+			}
 			return $UNKNOWN;
 		} else {
 			debug(2, "do_analysis: return code $cmd{rc} is OK, continuing with analysis");
