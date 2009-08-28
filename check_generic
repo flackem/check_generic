@@ -78,6 +78,7 @@ my %opt=(
 	"empty_output_is_ok"	=> 0,
 	"libexec"	=> "/usr/local/nagios/libexec",
 	"maxage"	=> 24, #hours
+	"match_stderr"	=> 0,
 	"name"		=> "CHANGEME",
 	"performance"	=> undef,
 	"report"	=> 15,
@@ -102,14 +103,15 @@ sub process_parameters {
 		"c|critical=s"	=> \$opt{critical},
 		"d|tmpdir=s"	=> \$opt{tmpdir},
 		"e|execute=s"	=> \$opt{execute},
+		"empty_output_is_ok"	=> \$opt{empty_output_is_ok},
+		"f|false=s"	=> \$opt{false},
 		"h|help"	=> \$opt{help},
 		"i|ignore_rc"	=> \$opt{ignore_rc},
-		"empty_output_is_ok"	=> \$opt{empty_output_is_ok},
 		"n|name=s"	=> \$opt{name},
 		"o|ok=s"	=> \$opt{ok},
 		"p|performance=s" => \$opt{performance},
 		"r|report:i"	=> \$opt{report},
-		"f|false=s"	=> \$opt{false},
+		"match_stderr"	=> \$opt{match_stderr},
 		"t|timeout=i"	=> \$opt{timeout},
 		"u|unknown=s"	=> \$opt{unknown},
 		"v|verbose+"	=> \$opt{verbose},
@@ -247,6 +249,9 @@ Options:
 -d, --tmpdir
    specify directory for tmpfiles, default: $opt{tmpdir}
    (garbage collection for files \'${MYSELF}*\' removes files older than )
+--match_stderr
+   if you have commands which create their output on STDERR, use this switch
+   to add STDERR to STDOUT and then perform a regex matching for both.
 -p, --performance <tag>
    provide returned data as performance data with name <tag>
 -v, --verbose
@@ -256,18 +261,6 @@ Options:
 -V, --version
    print version information
 LONGEOF
-
-#-s, --state [u|UNKNOWN|w|WARNING|c|CRITICAL|o|OK]
-#   which state the plugin should become if the expression is true
-#-r, --report <level>
-#  specify level of details in output (level is binary coded, just add all options)
-#   default: $opt{report}
-#      1: mention service names in plugin_output, e.g.
-#         "24 plugins checked, 1 critical (http), 0 warning, 0 unknown, 23 ok"
-#      2: show STATE in front of each line of plugin output, e.g.
-#         "[16] OK system_ssh - SSH OK - OpenSSH_4.4 (protocol 1.99)"
-#      4: show STDERR (if any) in each line of plugin output
-#      8: show performance data
 }
 
 #---
@@ -491,11 +484,11 @@ sub exec_command {
 		#--- remove white chars from output
 		chomp $cmd{output};
 		$cmd{output}=~s/['"]*//mg;
-		#$cmd{output}=~s/\n/\\n/mg;
-		#$cmd{output}=mytrim($cmd{output},"\\n\\s");
-		#$cmd{stderr}=mytrim($cmd{stderr},"\\n\\s");
 
-		#print "DEBUG output:>$cmd{output}< stderr:>$cmd{stderr}<n";
+		#--- chomp stderr
+		chomp $cmd{stderr};
+
+		debug(4,"exec_command: cleaned up output:>$cmd{output}< stderr:>$cmd{stderr}<");
 
 		alarm(0);
 	};
@@ -592,8 +585,18 @@ sub do_analysis {
 	foreach my $severity (@{$rc{textsev}}) {
 
 		if (defined($opt{$severity})) {
-			debug(2,"do_analysis: severity $severity defined:$opt{$severity}");
-			my $expression="\'$cmd{output}\'$opt{$severity}";
+			debug(2,"do_analysis: defined severity $severity: $opt{$severity}"); 
+
+			#--- expression to eval consists of 3 parts
+			#--- 1. STDOUT
+			my $expression="\'$cmd{output}";
+			#--- 2. STDERR (if activated with --match_stderr)
+			$expression.=$cmd{stderr} if ($opt{match_stderr});
+			#--- 3. regex assigned to this severity
+			$expression.="\'$opt{$severity}";
+
+			debug(4,"do_analysis: output:>$cmd{output}< stderr:>$cmd{stderr}< severity expression:>$opt{$severity}< match_stderr:$opt{match_stderr}");
+			debug(4,"do_analysis: bound all together - expression to eval >$expression<");
 			debug(2,"do_analysis: evaluate expression for severity $severity >" . squeeze($cmd{output},"left",80) . 
 				squeeze($opt{$severity},"both",80)."<");
 			#--- can be numerical or string evaluation
