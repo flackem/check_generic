@@ -1,5 +1,6 @@
 ===== Changelog =====
 
+  * added --print_match to replace output with part of the regex, thanks to Gerhard again!
   * added --match_stderr option to include STDERR into evaluation, thx to Gerhard Lausser
   * added warn;crit parts to performance data
   * option empty_output_is_ok to avoid UNKNOWN

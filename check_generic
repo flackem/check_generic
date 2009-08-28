@@ -79,6 +79,7 @@ my %opt=(
 	"libexec"	=> "/usr/local/nagios/libexec",
 	"maxage"	=> 24, #hours
 	"match_stderr"	=> 0,
+	"match_is_output" => 0,
 	"name"		=> "CHANGEME",
 	"performance"	=> undef,
 	"report"	=> 15,
@@ -103,7 +104,7 @@ sub process_parameters {
 		"c|critical=s"	=> \$opt{critical},
 		"d|tmpdir=s"	=> \$opt{tmpdir},
 		"e|execute=s"	=> \$opt{execute},
-		"empty_output_is_ok"	=> \$opt{empty_output_is_ok},
+		"empty_output_is_ok" => \$opt{empty_output_is_ok},
 		"f|false=s"	=> \$opt{false},
 		"h|help"	=> \$opt{help},
 		"i|ignore_rc"	=> \$opt{ignore_rc},
@@ -112,6 +113,7 @@ sub process_parameters {
 		"p|performance=s" => \$opt{performance},
 		"r|report:i"	=> \$opt{report},
 		"match_stderr"	=> \$opt{match_stderr},
+		"print_match" => \$opt{print_match},
 		"t|timeout=i"	=> \$opt{timeout},
 		"u|unknown=s"	=> \$opt{unknown},
 		"v|verbose+"	=> \$opt{verbose},
@@ -254,6 +256,9 @@ Options:
    to add STDERR to STDOUT and then perform a regex matching for both.
 -p, --performance <tag>
    provide returned data as performance data with name <tag>
+--print_match
+   if you specify a pattern match like -c '=~/foo (bar)/' you can enclose parts of 
+   the pattern with brackets. These parts will be used as output lateron
 -v, --verbose
    increase verbosity (can be called multiple), default: $opt{verbose}
 -h, --help
@@ -601,6 +606,12 @@ sub do_analysis {
 				squeeze($opt{$severity},"both",80)."<");
 			#--- can be numerical or string evaluation
 			if (eval($expression)) {
+
+				#--- if you specify such patterns: '=~/one (\S+) three/', 'two' will be added 
+				#--- into variable output_match and can be reported lateron
+				eval("$expression;\$cmd{output_match}=defined(\$1)?\$1:''");
+				debug(4,"do_analysis: output_match is >$cmd{output_match}<");
+
 				$cmd{match}=$opt{$severity};
 				push @{$cmd{matchlist}},$severity;
 				$returncode=$rc{number}{$severity};
@@ -630,31 +641,50 @@ sub do_report {
 	foreach my $var ('$opt{name}','$rc{rc}','$rc{label}{$rc{rc}}','$cmd{result}','$cmd{match}','$cmd{matchlist}') {
 		defined_var("do_report",$var);
 	}
+
 	#--- report results
-	my $report_output=sprintf "%s %s - result:%s %s %s",
-		$opt{name},
-		$rc{label}{$rc{rc}},
-		defined($cmd{result}) 
-			? $cmd{result} 
-			: "[...]",
-		defined($cmd{match})
-			?  ($cmd{match} eq "none") 
-				? "" 
-				: "match:$cmd{match}"
-			: "match:[...]",
-		(@{$cmd{matchlist}}) 
-			? "severities:" . join(',',@{$cmd{matchlist}}) . " " 
-			: "";
+	my $report_output="";
 
-	#--- if delta specified, print old and new value
-	if (	$opt{type} eq "delta" && 
-		defined($cmd{old_output}) && 
-		defined($cmd{org_output}) && 
-		defined($cmd{elapsed_seconds})) {
+	#--- print matched output only
+	if ($opt{print_match}) {
+		my $output="";
+		if (defined($cmd{output_match})) {
+			$output=$cmd{output_match};
+		} else {
+			$output=($opt{match_stderr})?"$cmd{output}$cmd{stderr}":"$cmd{output}";
+		}
+		$report_output=sprintf "%s %s - %s", 
+			$opt{name},
+			$rc{label}{$rc{rc}},
+			$output;
 
-		my $format = (is_integer($cmd{org_output})) ?  "old:%d new:%d time:%lds" : "old:%f new:%f time period:%lds";
-		$report_output.= sprintf $format, $cmd{old_output}, $cmd{org_output}, $cmd{elapsed_seconds};
+	#--- print standard stuff 
+	} else {
+		$report_output=sprintf "%s %s - result:%s %s %s",
+			$opt{name},
+			$rc{label}{$rc{rc}},
+			defined($cmd{result}) 
+				? $cmd{result} 
+				: "[...]",
+			defined($cmd{match})
+				?  ($cmd{match} eq "none") 
+					? "" 
+					: "match:$cmd{match}"
+				: "match:[...]",
+			(@{$cmd{matchlist}}) 
+				? "severities:" . join(',',@{$cmd{matchlist}}) . " " 
+				: "";
+		#--- if delta specified, print old and new value
+		if (	$opt{type} eq "delta" && 
+			defined($cmd{old_output}) && 
+			defined($cmd{org_output}) && 
+			defined($cmd{elapsed_seconds})) {
+	
+			my $format = (is_integer($cmd{org_output})) ?  "old:%d new:%d time:%lds" : "old:%f new:%f time period:%lds";
+			$report_output.= sprintf $format, $cmd{old_output}, $cmd{org_output}, $cmd{elapsed_seconds};
+		}
 	}
+
 	#--- add errors if encountered
 	$report_output.=" [" . join(", ",@{$rc{error}}) . "]" if (defined($rc{error}[0]));
 
