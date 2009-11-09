@@ -695,8 +695,8 @@ sub do_report {
 	if ($opt{performance}) {
 		my $warn=0;
 		my $crit=0;
-		$warn=$1 if ($opt{warning}=~ /([-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)/);
-		$crit=$1 if ($opt{critical}=~/([-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)/);
+		$warn=$1 if (defined ($opt{warning})  && $opt{warning}=~ /([-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)/);
+		$crit=$1 if (defined ($opt{critical}) && $opt{critical}=~/([-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)/);
 
 		# 'label'=value[UOM];[warn];[crit];[min];[max]
 		if ($warn || $crit) {
