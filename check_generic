@@ -700,9 +700,9 @@ sub do_report {
 
 		# 'label'=value[UOM];[warn];[crit];[min];[max]
 		if ($warn || $crit) {
-			printf "|%s=%s;%f;%f;;;", $opt{performance}, squeeze($cmd{output},"left",80),$warn,$crit; 
+			printf "|%s=%s;%f;%f;;", $opt{performance}, squeeze($cmd{output},"left",80),$warn,$crit; 
 		} else {
-			printf "|%s=%s", $opt{performance}, squeeze($cmd{output},"left",80) 
+			printf "|%s=%s;;;;", $opt{performance}, squeeze($cmd{output},"left",80) 
 		}
 	}
 	printf "\n";
