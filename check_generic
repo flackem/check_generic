@@ -114,6 +114,8 @@ sub process_parameters {
 		"r|report:i"	=> \$opt{report},
 		"match_stderr"	=> \$opt{match_stderr},
 		"print_match" => \$opt{print_match},
+		"encode"        => \$opt{encode},
+		"decode"        => \$opt{decode},
 		"t|timeout=i"	=> \$opt{timeout},
 		"u|unknown=s"	=> \$opt{unknown},
 		"v|verbose+"	=> \$opt{verbose},
@@ -135,11 +137,19 @@ sub process_parameters {
         	long_usage();
         	return $UNKNOWN;
 	}
+	if ($opt{encode}) {
+	        my $input = <>;
+	        chomp $input;
+	        $input =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
+	        printf "%s\n", $input;
+	        return $UNKNOWN;
+	}
 	if (!$opt{execute}) {
         	print "$MYSELF error: no commandline specified\n";
 		short_usage();
         	return $UNKNOWN;
 	} else {
+		url_decode(\$opt{execute});
 		$cmd{command}=$opt{execute};
 		$cmd{name}=$opt{execute};
 	}
@@ -151,6 +161,7 @@ sub process_parameters {
 	} else {
 		foreach my $state (reverse @{$rc{textsev}}) {
 			if (defined($opt{$state})) {
+				url_decode(\$opt{$state});
 				$opt{string}=is_string_cmp($opt{$state});
 				debug(3,"process_parameters: state $state defined:$opt{$state}, is_string:$opt{string}");
 			} else {
@@ -259,6 +270,10 @@ Options:
 --print_match
    if you specify a pattern match like -c '=~/foo (bar)/' you can enclose parts of 
    the pattern with brackets. These parts will be used as output lateron
+--encode
+   encode STDIN as url string for convenience and easier argument passing via ssh
+--decode
+   treat the execute and severity strings as URL encoded and decode them before using
 -v, --verbose
    increase verbosity (can be called multiple), default: $opt{verbose}
 -h, --help
@@ -355,6 +370,19 @@ sub squeeze {
 	} else {
 		return "squeeze error: unknown fromwhere parameter $fromwhere\n";
 	}
+}
+
+#---
+#--- taken from check_oracle_health ;-)
+#---
+sub url_decode {
+    my $string_ref = shift;
+    # objects can be encoded like an url
+    # with s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
+    if ($opt{decode}) { # just decode if wanted
+      $$string_ref =~ s/\%([A-Fa-f0-9]{2})/pack('C', hex($1))/seg;
+    }
+    debug(3,"URL decoded: $$string_ref");
 }
 
 #---

@@ -1,5 +1,6 @@
 ===== Changelog =====
 
+  * added URL encoding and decoding (walk on the Lausser way ;), thx to Birger Schmidt for the patch
   * removed CHANGEME as default name, new default is undef. Thx Gerhard for the third time ;)
   * added --print_match to replace output with part of the regex, thanks to Gerhard again!
   * added --match_stderr option to include STDERR into evaluation, thx to Gerhard Lausser
