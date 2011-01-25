@@ -496,8 +496,25 @@ sub exec_command {
 		$tmp_stdout=&get_tmpfile($opt{tmpdir}, "${MYSELF}_stdout_$$");
 		$tmp_stderr=&get_tmpfile($opt{tmpdir}, "${MYSELF}_stderr_$$");
 
-		#--- execute command and store stdout/stderr/return code
-		`$cmd{command} 1>$tmp_stdout 2>$tmp_stderr`;
+		#--- execute command: either with absolute path
+		if($cmd{command} =~ m|^/|) {
+			debug(3, "exec_command: \"$cmd{command}\"");
+			`$cmd{command} 1>$tmp_stdout 2>$tmp_stderr`;
+		#--- or test FindBin path
+		} else {
+			use FindBin qw($Bin);
+			#--- if command is available in check_generic dir, take this one
+			if (-x "${Bin}/$cmd{command}") {
+				debug(3, "exec_command: \"${Bin}$cmd{command}\"");
+				`${Bin}/$cmd{command} 1>$tmp_stdout 2>$tmp_stderr`;
+			#--- otherwise follow PATH as usual
+			} else {
+				debug(3, "exec_command: \"${Bin}$cmd{command}\"");
+				`$cmd{command} 1>$tmp_stdout 2>$tmp_stderr`;
+			}
+		}
+ 		
+		#--- and store stdout/stderr/return code
 		$cmd{rc}=$? >> 8;
 		$cmd{timestamp}=time;
 

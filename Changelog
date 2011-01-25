@@ -1,22 +1,23 @@
 ===== Changelog =====
 
-  * added URL encoding and decoding (walk on the Lausser way ;), thx to Birger Schmidt for the patch
-  * removed CHANGEME as default name, new default is undef. Thx Gerhard for the third time ;)
-  * added --print_match to replace output with part of the regex, thanks to Gerhard again!
-  * added --match_stderr option to include STDERR into evaluation, thx to Gerhard Lausser
-  * added warn;crit parts to performance data
-  * option empty_output_is_ok to avoid UNKNOWN
-  * if execution output is empty: return UNKNOWN
-  * performance data help added
-  * added http://my-plugin/check_generic to help
-  * omit 'match:none' if no threshold was hit
-  * delta mode: print old and new value plus time
-  * added "don't run as root" msg
-  * better messaging for RC != 0
-  * escaped "'" to avoid eval errors
+	* added FindBin for command path (thx to Jason Benguerel)
+	* added URL encoding and decoding (walk on the Lausser way ;), thx to Birger Schmidt for the patch
+	* removed CHANGEME as default name, new default is undef. Thx Gerhard for the third time ;)
+	* added --print_match to replace output with part of the regex, thanks to Gerhard again!
+	* added --match_stderr option to include STDERR into evaluation, thx to Gerhard Lausser
+	* added warn;crit parts to performance data
+	* option empty_output_is_ok to avoid UNKNOWN
+	* if execution output is empty: return UNKNOWN
+	* performance data help added
+	* added http://my-plugin/check_generic to help
+	* omit 'match:none' if no threshold was hit
+	* delta mode: print old and new value plus time
+	* added "don't run as root" msg
+	* better messaging for RC != 0
+	* escaped "'" to avoid eval errors
 
 **0.0.1**        7.09.2007
-  * added lots of documentation on my-plugin.de
-  * added garbage_collection to remove obsolete delta files
-  * fixed numerical output 
-  * added match_env to report string matches
+	* added lots of documentation on my-plugin.de
+	* added garbage_collection to remove obsolete delta files
+	* fixed numerical output 
+	* added match_env to report string matches
