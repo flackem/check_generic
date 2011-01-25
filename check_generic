@@ -76,6 +76,7 @@ my %opt=(
 	"configfile"	=> "",
 	"ignore_rc"	=> 0,
 	"empty_output_is_ok"	=> 0,
+	"escape_chars"	=> "\'\"\$\@",
 	"libexec"	=> "/usr/local/nagios/libexec",
 	"maxage"	=> 24, #hours
 	"match_stderr"	=> 0,
@@ -519,8 +520,8 @@ sub exec_command {
 		$cmd{timestamp}=time;
 
 		#--- store stdout/stderr and cleanup tmpfiles
-		$cmd{output}=readfile($tmp_stdout);
-		$cmd{stderr}=readfile($tmp_stderr);
+		$cmd{output}=readfile($tmp_stdout); chomp $cmd{output};
+		$cmd{stderr}=readfile($tmp_stderr); chomp $cmd{stderr};
 		unlink $tmp_stdout, $tmp_stderr;
 		debug(3, "exec_command: raw output:>" . squeeze($cmd{output},"both",80) . "<");
 		debug(3, "exec_command: raw stderr:>" . squeeze($cmd{stderr},"both",80) . "<");
@@ -531,12 +532,8 @@ sub exec_command {
 			$cmd{rc}=$UNKNOWN;
 		}
 		
-		#--- remove white chars from output
-		chomp $cmd{output};
-		$cmd{output}=~s/['"]*//mg;
-
-		#--- chomp stderr
-		chomp $cmd{stderr};
+		#--- escape interpolation problems
+		$cmd{output}=~s/([$opt{escape_chars}])/\\$1/mg;
 
 		debug(4,"exec_command: cleaned up output:>$cmd{output}< stderr:>$cmd{stderr}<");
 

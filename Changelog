@@ -1,5 +1,6 @@
 ===== Changelog =====
 
+	* escape several chars in output to improve matching (thx to Jason Benguerel)
 	* added FindBin for command path (thx to Jason Benguerel)
 	* added URL encoding and decoding (walk on the Lausser way ;), thx to Birger Schmidt for the patch
 	* removed CHANGEME as default name, new default is undef. Thx Gerhard for the third time ;)
