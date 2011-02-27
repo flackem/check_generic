@@ -33,6 +33,7 @@ my $match_is_output="@match_is_output@";
 my $match_stderr="@match_stderr@";
 my $maxage="@maxage@";
 my $name="@name@";
+my $omd_environment=@omd_environment@;
 my $report="@report@";
 my $timeout="@timeout@";
 my $tmp_dir="@tmp_dir@";
@@ -87,6 +88,7 @@ while (my $f = shift @ARGV) {
                 s|\@match_stderr\@|$match_stderr|g;
                 s|\@maxage\@|$maxage|g;
                 s|\@name\@|$name|g;
+		s|\@omd_environment\@|$omd_environment|g;
                 s|\@report\@|$report|g;
                 s|\@timeout\@|$timeout|g;
                 s|\@tmp_dir\@|$tmp_dir|g;

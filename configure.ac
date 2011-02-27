@@ -51,7 +51,9 @@ fi
 
 
 client_perl=no
-AC_ARG_WITH(client_perl,                [  --with-client_perl=<perl path>           sets perl cmdline / path (e.g. #!/usr/bin/perl)],client_perl=$withval,client_perl="no")
+AC_ARG_WITH(client_perl,                [ 
+Detail settings:
+  --with-client_perl=<perl path>           sets perl cmdline / path (e.g. #!/usr/bin/perl)],client_perl=$withval,client_perl="no")
 if test client_perl=no; then
 	AC_PATH_PROG(client_perl,perl)
 fi
@@ -63,6 +65,7 @@ AC_ARG_WITH(maxage,			[  --with-maxage=<hours>                    maximum age of
 AC_ARG_WITH(match_stderr,		[  --with-match_stderr=<0|1>                match should include STDERR? (default:0)],match_stderr=$withval,match_stderr=0)
 AC_ARG_WITH(match_is_output,		[  --with-match_is_output=<0|1>             only the matched pattern is output],match_is_output=$withval,match_is_output=0)
 AC_ARG_WITH(name,		        [  --with-name=<namestring>                 name string (default:'')],name=$withval,name='')
+AC_ARG_WITH(omd_environment,		[  --with-omd_environment=<0|1>             Run check_generic within OMD enviroment (default:0)],omd_environment=$withval,omd_environment=0)
 AC_ARG_WITH(report,			[  --with-report=<NN>                       default report option (default:13)],report=$withval,report="13")
 AC_ARG_WITH(timeout,			[  --with-timeout=<NN>                      timeout for check (default:10)],timeout=$withval,timeout="10")
 AC_ARG_WITH(tmp_dir,			[  --with-tmp_dir=<path>                    /path/to/tmp_dir (default:/tmp/check_generic)],tmp_dir=$withval,tmp_dir="/tmp/check_generic")
@@ -86,6 +89,7 @@ AC_SUBST(maxage)
 AC_SUBST(match_stderr)
 AC_SUBST(match_is_output)
 AC_SUBST(name)
+AC_SUBST(omd_environment)
 AC_SUBST(report)
 AC_SUBST(timeout)
 AC_SUBST(tmp_dir)

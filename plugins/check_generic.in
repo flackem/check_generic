@@ -22,7 +22,18 @@
 #
 use strict;
 use Getopt::Long qw(:config no_ignore_case bundling);
-BEGIN { eval("use Time::HiRes qw(time)") }
+BEGIN {
+	#--- OMD environment? Then we have to be sure that vars are defined
+	#--- otherwise somebody copied check_multi from OMD to remote hosts
+        if (@omd_environment@ && (!$ENV{OMD_SITE} || !$ENV{OMD_ROOT})) {
+                print "Error: OMD_SITE or OMD_ROOT variables not found.\n".
+                	"If you're running check_generic outside of OMD environment,\n".
+			"add OMD_ROOT and OMD_SITE to the environment\n";
+                exit 3;
+	}
+	#--- if hires timer available, use it
+	eval("use Time::HiRes qw(time sleep)");
+}
 use lib "@libexecdir@";
 use vars qw(
 $MYSELF %opt %cmd %rc $command $returncode 
@@ -81,6 +92,7 @@ my %opt=(
 	"match_stderr"		=> @match_stderr@,
 	"match_is_output"	=> @match_is_output@,
 	"name"			=> "@name@",
+	"omd_environment"	=> @omd_environment@,
 	"performance"		=> undef,
 	"report"		=> @report@,
 	"string"		=> {},
@@ -109,6 +121,7 @@ sub process_parameters {
 		"match_stderr"		=> \$opt{match_stderr},
 		"n|name=s"		=> \$opt{name},
 		"o|ok=s"		=> \$opt{ok},
+		"omd_environment=i"	=> \$opt{omd_environment},
 		"p|performance=s"	=> \$opt{performance},
 		"print_match"		=> \$opt{print_match},
 		"r|report:i"		=> \$opt{report},
