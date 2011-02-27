@@ -1,0 +1,126 @@
+#!@PERL@ -w
+
+my $prefix="@prefix@";
+my $exec_prefix="@exec_prefix@";
+
+my $CHMOD="@CHMOD@";
+my $INSTALL="@INSTALL@"; 
+#--- ugly, but I don't know how to handle several subsequent directories.
+#--- if someone has an idea... ;)
+if ($INSTALL=~/^\.\//) {
+	my $pwd=`pwd`; chomp $pwd;
+	$INSTALL="$pwd/$INSTALL";
+}
+my $CM_VERSION=""; 
+if (-f "CM_VERSION") {
+	$CM_VERSION=`cat CM_VERSION`; 
+	chomp $CM_VERSION;
+} else {
+	$CM_VERSION="undetermined";
+}
+my $INSTALL_OPTS="@INSTALL_OPTS@";
+my $PERL="@PERL@";
+my $ac_configure_args="@ac_configure_args@";
+my $client_perl="@client_perl@";
+my $configfile="@configfile@";
+my $configure_args="@ac_configure_args@";
+my $configure_input="@configure_input@";
+my $empty_output_is_ok="@empty_output_is_ok@";
+my $escape_chars="@escape_chars@";
+my $host_alias="@host_alias@";
+my $ignore_rc="@ignore_rc@";
+my $match_is_output="@match_is_output@";
+my $match_stderr="@match_stderr@";
+my $maxage="@maxage@";
+my $name="@name@";
+my $report="@report@";
+my $timeout="@timeout@";
+my $tmp_dir="@tmp_dir@";
+my $tmp_dir_permissions="@tmp_dir_permissions@";
+my $type="@type@";
+my $verbose="@verbose@";
+my $bindir="@bindir@";
+my $builddir="@builddir@";
+my $datadir="@datadir@";
+my $datarootdir="@datarootdir@";
+my $includedir="@includedir@";
+my $infodir="@infodir@";
+my $libdir="@libdir@";
+my $libexecdir="@libexecdir@";
+my $localstatedir="@localstatedir@";
+my $mandir="@mandir@";
+my $oldincludedir="@oldincludedir@";
+my $sbindir="@sbindir@";
+my $sharedstatedir="@sharedstatedir@";
+my $srcdir="@srcdir@";
+my $sysconfdir="@sysconfdir@";
+
+while (my $f = shift @ARGV) {
+
+	if (-x "/bin/mktemp") { 
+		$TEMP = `/bin/mktemp $f.$$.XXXXXX`;
+		die "Cannot make temporary file $TEMP" if($?);
+		chomp $TEMP;
+	} else {
+		$XXXXXX = rand;
+		$TEMP = "$f.$$.$XXXXXX";
+	}
+
+	open(IN,"<$f.in") || die "Cannot open input file $f.in:$!";
+	open(OUT,">${TEMP}") || die "Cannot write to temporary file ${TEMP}:$!";
+
+	while (<IN>) {
+		s|\@CHMOD\@|$CHMOD|g;
+		s|\@INSTALL\@|$INSTALL|g;
+		s|\@INSTALL_OPTS\@|$INSTALL_OPTS|g;
+		s|\@client_perl\@|$client_perl|g;
+                s|\@configfile\@|$configfile|g;
+                s|\@configure_args\@|$configure_args|g;
+                s|\@configure_input\@|$configure_input|g;
+                s|\@empty_output_is_ok\@|$empty_output_is_ok|g;
+                s|\@escape_chars\@|$escape_chars|g;
+                s|\@host_alias\@|$host_alias|g;
+                s|\@ignore_rc\@|$ignore_rc|g;
+                s|\@match_is_output\@|$match_is_output|g;
+                s|\@match_stderr\@|$match_stderr|g;
+                s|\@maxage\@|$maxage|g;
+                s|\@name\@|$name|g;
+                s|\@report\@|$report|g;
+                s|\@timeout\@|$timeout|g;
+                s|\@tmp_dir\@|$tmp_dir|g;
+                s|\@tmp_dir_permissions\@|$tmp_dir_permissions|g;
+                s|\@type\@|$type|g;
+                s|\@verbose\@|$verbose|g;
+
+		# put all --with-vars before directories
+                s|\@bindir\@|$bindir|g;
+                s|\@builddir\@|$builddir|g;
+                s|\@datadir\@|$datadir|g;
+                s|\@datarootdir\@|$datarootdir|g;
+                s|\@includedir\@|$includedir|g;
+                s|\@infodir\@|$infodir|g;
+                s|\@libdir\@|$libdir|g;
+                s|\@libexecdir\@|$libexecdir|g;
+                s|\@localstatedir\@|$localstatedir|g;
+                s|\@mandir\@|$mandir|g;
+                s|\@oldincludedir\@|$oldincludedir|g;
+                s|\@sbindir\@|$sbindir|g;
+                s|\@sharedstatedir\@|$sharedstatedir|g;
+                s|\@srcdir\@|$srcdir|g;
+                s|\@sysconfdir\@|$sysconfdir|g;
+		s|\$\{exec_prefix\}|$exec_prefix|g;	# must be next to last
+		s|\@prefix\@|@prefix@|g;		# must be last
+		s|\$\{prefix\}|@prefix@|g;		# must be last
+		print OUT $_;
+	}
+
+	close IN;
+	close OUT;
+
+	if ((! -e $f) || (`diff $f $TEMP`)) {
+		`mv $TEMP $f`;
+	} else {
+	         unlink $TEMP;
+	}
+
+}

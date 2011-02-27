@@ -1,0 +1,28 @@
+#---
+#--- Makefile plugins
+#---
+#--- $Id$
+#---
+prefix=@prefix@
+CHMOD=@CHMOD@
+HTMLDIR=@datarootdir@
+INSTALL=@INSTALL@
+INSTALL_OPTS=@INSTALL_OPTS@
+LIBEXECDIR=@libexecdir@
+
+all:
+	$(CHMOD) 755 check_generic
+
+
+clean:
+	-rm -f check_generic
+
+distclean: clean
+	-rm -f Makefile
+
+devclean: distclean
+
+install: 
+	$(INSTALL) -m 755 $(INSTALL_OPTS) -d $(DESTDIR)$(LIBEXECDIR)
+	$(INSTALL) -m 755 $(INSTALL_OPTS) check_generic $(DESTDIR)$(LIBEXECDIR)
+

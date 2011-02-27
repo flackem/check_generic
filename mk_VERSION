@@ -1,0 +1,29 @@
+#!/bin/sh
+#
+# pre-commit script to create version info into CG_VERSION
+# $ ln -s mk_VERSION .git/hooks/pre-commit
+# 
+# 1. call: 
+#    - create version file GG_VERSION
+#    - create flag file 
+#    - exit with RC1 (error) -> return to command line
+# 2. call:
+#    - remove flag file
+#    - exit with RC0 (OK) -> commit
+#
+if [ ! -f CG_VERSION.version_is_updated ]; then
+	OLD_VERSION=`awk -F\_ '{print $3}' CG_VERSION | tr -d v`
+	NEW_VERSION=`expr $OLD_VERSION + 1`
+	DATESTRING=`date +%Y-%m-%d-%H:%M`
+	echo "check_generic_v${NEW_VERSION}_${DATESTRING}" > CG_VERSION
+	echo "Created new version file CG_VERSION with check_generic_v${NEW_VERSION}_${DATESTRING}"
+	echo "-> Now run commit again to check it in..."
+	touch CG_VERSION.version_is_updated
+
+	#--- exit with error first time
+	exit 1
+else 
+	rm CG_VERSION.version_is_updated
+	#--- exit with OK the second time
+	exit 0
+fi

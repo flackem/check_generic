@@ -1,0 +1,22 @@
+#---
+#--- Makefile contrib
+#---
+#--- $Id$
+#---
+prefix=@prefix@
+LIBEXECDIR=@libexecdir@
+HTMLDIR=@datarootdir@
+INSTALL=@INSTALL@
+INSTALL_OPTS=@INSTALL_OPTS@
+
+all: 
+
+clean:
+
+distclean: clean
+	-rm -f Makefile
+
+devclean: distclean
+
+install-contrib: 
+

@@ -1,0 +1,785 @@
+#!@client_perl@ -w
+#
+# check_generic - nagios plugin
+#
+# Copyright (c) 2007 Matthias Flacke (matthias.flacke at gmx.de)
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+#
+# $Id$
+#
+#nagios: -epn
+#
+use strict;
+use Getopt::Long qw(:config no_ignore_case bundling);
+BEGIN { eval("use Time::HiRes qw(time)") }
+use lib "@libexecdir@";
+use vars qw(
+$MYSELF %opt %cmd %rc $command $returncode 
+$VERSION $OK $WARNING $CRITICAL $UNKNOWN 
+$DETAIL_LIST $DETAIL_RC $DETAIL_STDERR $DETAIL_PERFORMANCE
+);
+
+#-------------------------------------------------------------------------------
+#--- vars ----------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+$MYSELF="check_generic";
+$VERSION='@CG_VERSION@'.
+	"\nconfigure @configure_args@";
+#
+#--- RC defines
+$OK=0;
+$WARNING=1;
+$CRITICAL=2;
+$UNKNOWN=3;
+#
+#--- report defines
+$DETAIL_LIST=1;
+$DETAIL_RC=2;
+$DETAIL_STDERR=4;
+$DETAIL_PERFORMANCE=8;
+#
+#--- vars
+%cmd=(
+	matchlist => [],
+);
+%rc=(
+	label	=> { $OK => "OK", $WARNING => "WARNING", $CRITICAL => "CRITICAL", $UNKNOWN => "UNKNOWN", },
+	number	=> { "OK" => $OK, "WARNING" => $WARNING, "CRITICAL" => $CRITICAL, "UNKNOWN" => $UNKNOWN, 
+                     "ok" => $OK, "warning" => $WARNING, "critical" => $CRITICAL, "unknown" => $UNKNOWN,
+                      "o" => $OK,  "w"      => $WARNING, "c"        => $CRITICAL, "u"       => $UNKNOWN, },
+	s2r	=> { 0 => $OK, 2 => $WARNING, 3 => $CRITICAL, 1 => $UNKNOWN, },
+	r2s	=> { $OK => 0, $WARNING => 2, $CRITICAL => 3, $UNKNOWN => 1, },
+	complement => { $OK => $CRITICAL, $WARNING => $OK, $CRITICAL => $OK, $UNKNOWN => $OK, },
+	minimum => { $OK => 0, $WARNING => 1, $CRITICAL => 1, $UNKNOWN => 1, },
+	maximum => { $OK => 0, $WARNING => 1, $CRITICAL => 1, $UNKNOWN => 1, },
+	list	=> { $OK => [],$WARNING => [],$CRITICAL => [],$UNKNOWN => [], },
+	textsev	=> ["ok","unknown","warning","critical"],
+	top	=> $OK,
+	error	=> [ ],
+	starttime => 0.0,
+	endtime => 0.0,
+);
+
+my %opt=(
+	"configfile"		=> "@configfile@",
+	"ignore_rc"		=> @ignore_rc@,
+	"empty_output_is_ok"	=> @empty_output_is_ok@,
+	"escape_chars"		=> "\"\'\$\@",
+	"libexec"		=> "@libexecdir@",
+	"maxage"		=> @maxage@,		# in hours
+	"match_stderr"		=> @match_stderr@,
+	"match_is_output"	=> @match_is_output@,
+	"name"			=> "@name@",
+	"performance"		=> undef,
+	"report"		=> @report@,
+	"string"		=> {},
+	"timeout"		=> @timeout@,
+	"tmpdir"		=> "@tmp_dir@",
+	"type"			=> "@type@",
+	"verbose"		=> @verbose@,
+);
+	
+#-------------------------------------------------------------------------------
+#--- subs ----------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+
+sub process_parameters {
+
+	if (! GetOptions(
+		"c|critical=s"		=> \$opt{critical},
+		"d|tmpdir=s"		=> \$opt{tmpdir},
+		"decode"       		=> \$opt{decode},
+		"e|execute=s"		=> \$opt{execute},
+		"empty_output_is_ok"	=> \$opt{empty_output_is_ok},
+		"encode"       		=> \$opt{encode},
+		"f|false=s"		=> \$opt{false},
+		"h|help"		=> \$opt{help},
+		"i|ignore_rc"		=> \$opt{ignore_rc},
+		"match_stderr"		=> \$opt{match_stderr},
+		"n|name=s"		=> \$opt{name},
+		"o|ok=s"		=> \$opt{ok},
+		"p|performance=s"	=> \$opt{performance},
+		"print_match"		=> \$opt{print_match},
+		"r|report:i"		=> \$opt{report},
+		"t|timeout=i"		=> \$opt{timeout},
+		"u|unknown=s"		=> \$opt{unknown},
+		"v|verbose+"		=> \$opt{verbose},
+		"V|version"		=> \$opt{version},
+		"w|warning=s"		=> \$opt{warning},
+		"y|type=s"		=> \$opt{type},
+		)
+	) {
+		short_usage();
+        	return $UNKNOWN;
+	}
+
+	if ($opt{version}) {
+		print "$MYSELF: v$VERSION\n";
+        	return $UNKNOWN;
+	}
+	if ($opt{help}) {
+		short_usage();
+        	long_usage();
+        	return $UNKNOWN;
+	}
+	if ($opt{encode}) {
+	        my $input = <>;
+	        chomp $input;
+	        $input =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
+	        printf "%s\n", $input;
+	        return $UNKNOWN;
+	}
+	if (!$opt{execute}) {
+        	print "$MYSELF error: no commandline specified\n";
+		short_usage();
+        	return $UNKNOWN;
+	} else {
+		url_decode(\$opt{execute});
+		$cmd{command}=$opt{execute};
+		$cmd{name}=$opt{execute};
+	}
+
+	if (!$opt{ok} && !$opt{warning} && !$opt{critical} && !$opt{unknown}) {
+        	print "$MYSELF error: no evaluation expression specified\n";
+		short_usage();
+        	return $UNKNOWN;
+	} else {
+		foreach my $state (reverse @{$rc{textsev}}) {
+			if (defined($opt{$state})) {
+				url_decode(\$opt{$state});
+				$opt{string}=is_string_cmp($opt{$state});
+				debug(3,"process_parameters: state $state defined:$opt{$state}, is_string:$opt{string}");
+			} else {
+				debug(3,"process_parameters: state $state not defined");
+			}
+		}
+	}
+	if ($opt{false} && (
+		$opt{false} ne "o" && $opt{false} ne "OK" &&
+		$opt{false} ne "u" && $opt{false} ne "UNKNOWN" &&
+		$opt{false} ne "w" && $opt{false} ne "WARNING" &&
+		$opt{false} ne "c" && $opt{false} ne "CRITICAL")) {
+		print "$MYSELF error: unknown false $opt{false}, should be u|UNKNOWN w|WARNING c|critical o|OK\n";
+                short_usage();
+                return $UNKNOWN;
+	}
+	while (!defined($opt{false})) {
+		foreach my $state (reverse @{$rc{textsev}}) {
+			#print "DEBUG:state:$state opt{state}:$opt{$state}\n";
+			if (defined($opt{$state})) {
+				$opt{false}=$rc{label}{$rc{complement}{$rc{number}{$state}}};
+				last;
+			}
+		}
+	}
+	if (! -d $opt{tmpdir}) {
+		mkdir $opt{tmpdir} || debug(0,"mkdir $opt{tmpdir} failed:$!");
+		if (! -d $opt{tmpdir}) {
+			return $UNKNOWN if (defined($opt{delta}));
+		}
+	}
+	if ($opt{type} eq "delta") {
+		#--- create tmpfile name from 1. tag 2. command 3. expressions
+		$opt{tmpfile}=$opt{name} . "_" . $opt{execute};
+		foreach my $state (reverse @{$rc{textsev}}) {
+			$opt{tmpfile} .= '_' . $opt{$state} if (defined($opt{$state}));
+		}
+		$opt{tmpfile}=~s/\W/_/g;
+		$opt{tmpfile}="$MYSELF.$opt{tmpfile}.tmp";
+		debug(2, "process_parameters: tmpfile:$opt{tmpfile}");
+		
+		#--- read content of old tmpfile if available
+		my $content=readfile("$opt{tmpdir}/$opt{tmpfile}");
+		if ($content ne "") {
+			chomp $content;
+			($cmd{old_timestamp},$cmd{old_output})=split(/\s+/,$content);
+			debug(2, "process_parameters: old_timestamp:$cmd{old_timestamp} old_output:$cmd{old_output}");
+		}
+		#--- remove old files in tmpdir older than one day
+		&garbage_collection($opt{maxage});
+	}
+	debug(2, "process_parameters: verbosity:$opt{verbose}");
+	return $OK;
+}
+
+sub short_usage {
+print <<SHORTEOF;
+
+$MYSELF -e <cmdline> -o|u|w|c <expression> [-f false_state] [-n name] [-t timeout] [-r level]
+$MYSELF [-h | --help]
+$MYSELF [-V | --version]
+
+[ more info on http://my-plugin.de/check_generic ]
+SHORTEOF
+}
+
+sub long_usage {
+print <<LONGEOF;
+
+Options:
+-e, --execute <cmdline>
+   string which contains commands to be executed
+   (can be a complete filter chain)
+-u|w|c|o, --unknown,warning,critical,ok <expression>
+   operator is perl operators, e.g.
+      '= n'	- numerically equal
+      '< n'	- numerically equal
+      '> n'	- numerically equal
+      'eq s'	- string equal
+      'ne s'	- string non equal
+      '=~/s/	- pattern matching
+   default: CRITICAL
+-f, --false [u|UNKNOWN|w|WARNING|c|CRITICAL|o|OK]
+   which state the plugin should become if the expression is false
+   default: complement of state
+-y, --type [SCALAR,ARRAY,DELTA]
+   type of data value
+--empty_output_is_ok
+   If there is no execution output the RC of check_generic is UNKNOWN.
+   Use this option if you expect empty output as a normal result.
+-i, --ignore_rc
+   Normally the return code of the command executed is taken into account.
+   use this option to explicitly ignore it, default: $opt{ignore_rc}
+-n, --name
+   plugin name (shown in output), default: $opt{name}
+-t, --timeout
+   timeout for one command, default: $opt{timeout}
+-d, --tmpdir
+   specify directory for tmpfiles, default: $opt{tmpdir}
+   (garbage collection for files \'${MYSELF}*\' removes files older than )
+--match_stderr
+   if you have commands which create their output on STDERR, use this switch
+   to add STDERR to STDOUT and then perform a regex matching for both.
+-p, --performance <tag>
+   provide returned data as performance data with name <tag>
+--print_match
+   if you specify a pattern match like -c '=~/foo (bar)/' you can enclose parts of 
+   the pattern with brackets. These parts will be used as output lateron
+--encode
+   encode STDIN as url string for convenience and easier argument passing via ssh
+--decode
+   treat the execute and severity strings as URL encoded and decode them before using
+-v, --verbose
+   increase verbosity (can be called multiple), default: $opt{verbose}
+-h, --help
+   print detailed help screen
+-V, --version
+   print version information
+LONGEOF
+}
+
+#---
+#--- debug output routine
+#---
+sub debug {
+	my ($level,$message)=@_;
+	print "$message\n" if ($level <= $opt{verbose});
+}
+
+#---
+#--- read file and return its contents
+#---
+sub readfile {
+        my ($filename)=@_;
+        open(FILE,$filename) || add_error("readfile: error opening $filename:$!") && return "";
+        my @lines=<FILE>;
+        close(FILE);
+        return join("", @lines);
+}
+
+#---
+#--- write to file
+#---
+sub writefile {
+        my ($filename, $content)=@_;
+        open(FILE,">$filename") || add_error("writefile: error opening $filename:$!") && return 0;
+        print FILE $content;
+        close(FILE);
+	return -s $filename;
+}
+
+#---
+#--- check if expression is string evaluation
+#---
+sub is_string_cmp {
+	my $expression=shift;
+	my %stringop=(' lt ',' gt ',' le ',' ge ','\=\~','\!\~',' eq ',' ne ');
+	foreach my $key (keys(%stringop)) {
+		return 1 if ($expression=~/^\s*$key/);
+	}
+	return 0;
+}
+#
+#---
+sub match_env {
+        my ($string, $expr, $wanted_length)=@_;
+        my @match=();
+        my @len=();
+        my $total="";
+        my $cute_little_proc="if (\'${string}\'${expr}) { \@match=(\$\`,\$\&,\$\'); }";
+        my $rc=eval($cute_little_proc);
+	#print "match_env: cute_little_proc:$cute_little_proc\n";
+	#print "match_env: string:$string expr:$expr wanted_length:$wanted_length rc eval:$rc eval:$@\n";
+        for my $i (0..$#match) {
+                $len[$i]=length($match[$i]);
+                #print "match $i: $match[$i] ($len[$i])\n";
+        }
+	return	squeeze($match[0],"right",$wanted_length/3) . 
+		squeeze($match[1],"middle",$wanted_length/3) . 
+		squeeze($match[2],"left",$wanted_length/3);
+}
+
+#---
+#--- squeeze string
+#---
+sub squeeze {
+	my ($string,$fromwhere,$num)=@_;
+
+	return "" if (!defined($string));
+
+	my $len=length($string);
+	my $replacement="[...]";
+	my $rlen=5;  		# length($replacement)
+
+	#--- nothing to squeeze ;-)
+	return $string if ($len<=$num);
+
+	if ($fromwhere eq "left") {
+		return substr($string,0,$num-$rlen) . $replacement;
+	} elsif ($fromwhere eq "middle") {
+		return $replacement . substr($string,($len/2)-($num/2)+$rlen,$num-($rlen*2)) . $replacement;
+	} elsif ($fromwhere eq "right") {
+		return $replacement . substr($string,$num*-1+$rlen);
+	} elsif ($fromwhere eq "both") {
+		return substr($string,0,$num/2-($rlen/2)) . $replacement . substr($string,($num*-1)/2+($rlen/2));
+	} else {
+		return "squeeze error: unknown fromwhere parameter $fromwhere\n";
+	}
+}
+
+#---
+#--- taken from check_oracle_health ;-)
+#---
+sub url_decode {
+    my $string_ref = shift;
+    # objects can be encoded like an url
+    # with s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
+    if ($opt{decode}) { # just decode if wanted
+      $$string_ref =~ s/\%([A-Fa-f0-9]{2})/pack('C', hex($1))/seg;
+    }
+    debug(3,"URL decoded: $$string_ref");
+}
+
+#---
+#--- taken from Perl Cookbook ;-)
+#---
+sub is_valid_regex {
+    my $pat = shift;
+    return eval { "" =~ /$pat/; 1 } || 0;
+}
+
+#---
+#--- taken from Perl Cookbook ;-)
+#---
+sub is_integer {
+    my $number = shift;
+    return eval { $number=~/^[+-]?\d+$/; 1 } || 0;
+}
+#---
+#--- trim input string if found any chars from trim string
+#---
+sub mytrim {
+	my ($src, $trim)=@_;
+	return ($src=~/[$trim]*(.*)[$trim]*/) ? $1 : $src;
+}
+
+#---
+#---
+#---
+sub mysubst {
+	my ($src,$pattern,$substitution)=@_;
+	$src=~s/$pattern/$substitution/g;
+	return $src;
+}
+
+#---
+#--- substitute macros a la $HOSTNAME$ from environment
+#---
+sub substitute_macros {
+        my ($input)=@_;
+        while ((my $var)=($input=~/\$([A-Z0-9^\$]+)\$/)) {
+                $input=~s/\$$var\$/$ENV{"NAGIOS_$var"}/g;
+        }
+        return $input;
+}
+
+#---
+#--- add error(s) to global error list
+#---
+sub add_error {
+	push @{$rc{error}}, @_;
+}
+
+#---
+#--- create unique tmpfile and try to create it
+#---
+sub get_tmpfile {
+	my ($path,$prefix)=@_;
+	my $attempt=0;
+	my $tmpfile="";
+	#--- check existance of path and create it if necessary
+	if (! -d $path && ! mkdir($path,0700)) {
+		die("get_tmpfile: error creating tmp_path $path:$!");
+		return "";
+	}
+	#--- do 5 attempts to create tmpfile
+	while (++$attempt <= 5) {
+		my $suffix=int(rand(89999))+10000;
+		$tmpfile="$path/$prefix.$suffix";
+		next if (-f $tmpfile);
+		if (open(TMP,">$tmpfile")) {
+			close TMP;
+			return $tmpfile;
+		}
+	}
+	die("get_tmpfile: giving up opening $tmpfile:$!");
+	return "";
+}
+
+#---
+#--- remove too old files from $tmpdir
+#---
+sub garbage_collection {
+	my $interval=shift;
+	opendir(DIR, $opt{tmpdir}) or die "garbage_collection: cannot open directory $opt{tmpdir}: $!";
+	while (defined(my $filename = readdir(DIR))) {
+		#--- basic security against weak tmpdirs: delete only files beginning with $MYSELF
+		next if ($filename!~/^$MYSELF/);
+		my $mtime=(stat("$opt{tmpdir}/$filename"))[9];
+		if (time-$mtime>($interval*60*60)) {
+			debug(2, sprintf("garbage collection: removing %d hours old $opt{tmpdir}/$filename", (time-$mtime)/(60*60)));
+			unlink "$opt{tmpdir}/$filename";
+		}
+	}
+	closedir(DIR);
+}
+
+#---
+#--- execute $command, return result in %cmd 
+#---
+sub exec_command {
+	my ($cmd)=@_;
+	my $tmp_stdout="";
+	my $tmp_stderr="";
+
+	#--- execute command with alarm timer to catch timeouts
+	$SIG{'ALRM'} = sub { die "timeout" };
+	eval {
+		alarm($opt{timeout});
+
+		#--- prepare tmpfiles for stdout and stderr
+		$tmp_stdout=&get_tmpfile($opt{tmpdir}, "${MYSELF}_stdout_$$");
+		$tmp_stderr=&get_tmpfile($opt{tmpdir}, "${MYSELF}_stderr_$$");
+
+		#--- execute command: either with absolute path
+		if($cmd{command} =~ m|^/|) {
+			debug(3, "exec_command: \"$cmd{command}\"");
+			`$cmd{command} 1>$tmp_stdout 2>$tmp_stderr`;
+		#--- or test FindBin path
+		} else {
+			use FindBin qw($Bin);
+			#--- if command is available in check_generic dir, take this one
+			if (-x "${Bin}/$cmd{command}") {
+				debug(3, "exec_command: \"${Bin}$cmd{command}\"");
+				`${Bin}/$cmd{command} 1>$tmp_stdout 2>$tmp_stderr`;
+			#--- otherwise follow PATH as usual
+			} else {
+				debug(3, "exec_command: \"${Bin}$cmd{command}\"");
+				`$cmd{command} 1>$tmp_stdout 2>$tmp_stderr`;
+			}
+		}
+ 		
+		#--- and store stdout/stderr/return code
+		$cmd{rc}=$? >> 8;
+		$cmd{timestamp}=time;
+
+		#--- store stdout/stderr and cleanup tmpfiles
+		$cmd{output}=readfile($tmp_stdout); chomp $cmd{output};
+		$cmd{stderr}=readfile($tmp_stderr); chomp $cmd{stderr};
+		unlink $tmp_stdout, $tmp_stderr;
+		debug(3, "exec_command: raw output:>" . squeeze($cmd{output},"both",80) . "<");
+		debug(3, "exec_command: raw stderr:>" . squeeze($cmd{stderr},"both",80) . "<");
+
+		#--- unknown return code? change it explicitly to UNKNOWN
+		if (!defined($rc{r2s}{$cmd{rc}})) {
+			$cmd{stderr}.=" RC was $cmd{rc}!";
+			$cmd{rc}=$UNKNOWN;
+		}
+		
+		#--- escape interpolation problems
+		$cmd{output}=~s/([$opt{escape_chars}])/\\$1/mg;
+
+		debug(4,"exec_command: cleaned up output:>$cmd{output}< stderr:>$cmd{stderr}<");
+
+		alarm(0);
+	};
+	
+	#--- any oddities during command execution?
+	if ($@) {
+		#--- timeout encountered: store status
+		if ($@ =~ /timeout/) {
+			$cmd{output}="UNKNOWN - command cancelled after timeout ($opt{timeout}s)";
+			$cmd{rc}=$UNKNOWN;
+		#--- catchall for unknown errors
+		} else {
+			alarm(0);
+       			die "$MYSELF: unexpected exception encountered:$@";
+		}
+		unlink $tmp_stdout, $tmp_stderr;
+	}
+	return $cmd{rc};
+}
+
+#---
+#--- analyze results stored in %cmd
+#---
+sub do_analysis {
+	my ($cmd)=@_;
+	#debug(2,"do_analysis: state:$opt{state} false:$opt{false} number{false}:($rc{number}{$opt{false}})");
+	my $returncode=$rc{number}{$opt{false}};
+
+	#--- first: check return code
+	if ($opt{ignore_rc}) {
+		if ($cmd{rc} != 0) {
+			debug(2, "do_analysis: ignoring error return code $cmd{rc}");
+		}
+	} else {
+		#debug(2, "do_analysis: checking return code $cmd{rc}");
+		if ($cmd{rc} != 0) {
+			debug(2, "do_analysis: return code $cmd{rc} != OK - returning UNKNOWN");
+			$cmd{result}="RC$cmd{rc} output:" . squeeze($cmd{output},"left",80);
+			$cmd{match}="RC!=OK";
+
+			#--- provide some error message if RC != OK
+			if (! $opt{match_stderr} && $cmd{stderr}) {
+				add_error($cmd{stderr});
+			} elsif ($opt{match_stderr} && $cmd{stderr} && ! $cmd{output}) {
+				add_error($cmd{stderr});
+			}
+			return $UNKNOWN;
+		} else {
+			debug(2, "do_analysis: return code $cmd{rc} is OK, continuing with analysis");
+		}
+	} 
+
+	#--- second: if empty output, something's wrong. return UNKNOWN
+	if ($cmd{output}eq "" && !$opt{empty_output_is_ok}) {
+		debug(2, "do_analysis: output is empty - returning UNKNOWN");
+		$cmd{result}="output is empty";
+		$cmd{match}="none";
+		return $UNKNOWN;
+	}
+
+	#--- check type
+	if ($opt{type} eq "delta") {
+		if (defined($cmd{old_timestamp}) && $cmd{old_timestamp} > 0) {
+			$cmd{elapsed_seconds}=$cmd{timestamp}-$cmd{old_timestamp};
+			$cmd{org_output}=$cmd{output};
+			$cmd{delta}=$cmd{output}-$cmd{old_output};
+			writefile("$opt{tmpdir}/$opt{tmpfile}", "$cmd{timestamp} $cmd{output}");
+			debug(2, "do_analysis: elapsed_seconds:$cmd{elapsed_seconds} delta:$cmd{delta}");
+			if ($cmd{elapsed_seconds} > 0) {
+				$cmd{output}=sprintf "%.2f", $cmd{delta}/$cmd{elapsed_seconds};
+			}
+		} else {
+			writefile("$opt{tmpdir}/$opt{tmpfile}", "$cmd{timestamp} $cmd{output}");
+			$cmd{result}=squeeze($cmd{output},"left",80);
+			$cmd{match}="[ delta: no previous output available ]";
+                	return $UNKNOWN;
+		}
+	}
+
+	#--- start with no match
+	$cmd{match}="none";
+	$cmd{matchlist}=[];
+
+	if ($opt{string}) {
+		#--- escape newlines in multiline pattern
+		$cmd{output}=~s/\n/\\n/mg;
+		$cmd{result}=squeeze($cmd{output},"left",50);
+	} else {
+		#--- remove last newline from numerical patterns
+		chomp($cmd{output}) if ($cmd{output}=~/\n$/);
+		$cmd{result}=$cmd{output};
+	}
+
+	#--- step forward in the order of severity from OK to CRITICAL
+	foreach my $severity (@{$rc{textsev}}) {
+
+		if (defined($opt{$severity})) {
+			debug(2,"do_analysis: defined severity $severity: $opt{$severity}"); 
+
+			#--- expression to eval consists of 3 parts
+			#--- 1. STDOUT
+			my $expression="\'$cmd{output}";
+			#--- 2. STDERR (if activated with --match_stderr)
+			$expression.=$cmd{stderr} if ($opt{match_stderr});
+			#--- 3. regex assigned to this severity
+			$expression.="\'$opt{$severity}";
+
+			debug(4,"do_analysis: output:>$cmd{output}< stderr:>$cmd{stderr}< severity expression:>$opt{$severity}< match_stderr:$opt{match_stderr}");
+			debug(4,"do_analysis: bound all together - expression to eval >$expression<");
+			debug(2,"do_analysis: evaluate expression for severity $severity >" . squeeze($cmd{output},"left",80) . 
+				squeeze($opt{$severity},"both",80)."<");
+			#--- can be numerical or string evaluation
+			if (eval($expression)) {
+
+				#--- if you specify such patterns: '=~/one (\S+) three/', 'two' will be added 
+				#--- into variable output_match and can be reported lateron
+				eval("$expression;\$cmd{output_match}=defined(\$1)?\$1:''");
+				debug(4,"do_analysis: output_match is >$cmd{output_match}<");
+
+				$cmd{match}=$opt{$severity};
+				push @{$cmd{matchlist}},$severity;
+				$returncode=$rc{number}{$severity};
+				if ($opt{string}) {
+					$cmd{result}="x" . match_env($cmd{output},$opt{$severity},50);
+				} else {
+					$cmd{result}=$cmd{output};
+					#$cmd{result}=squeeze($cmd{output},"both",80);
+				}
+				debug(2,"do_analysis: eval was successful rc:$returncode result:\'$cmd{result}\' match:\'$cmd{match}\'");
+			} else {
+				$cmd{result}=squeeze($cmd{output},"both",80);
+				debug(2,"do_analysis: eval was *not* successful rc:$returncode severity:$severity expression:>" . 
+					squeeze($cmd{output},"both",80) . "$opt{$severity}<");
+			}
+			
+		} else {
+			debug(2,"do_analysis: severity $severity not defined -> continue");
+		}
+	}
+	return $returncode;
+}
+
+sub do_report {
+	my $cmd=shift;	
+
+	foreach my $var ('$opt{name}','$rc{rc}','$rc{label}{$rc{rc}}','$cmd{result}','$cmd{match}','$cmd{matchlist}') {
+		defined_var("do_report",$var);
+	}
+
+	#--- report results
+	my $report_output="";
+
+	#--- print matched output only
+	if ($opt{print_match}) {
+		my $output="";
+		if (defined($cmd{output_match})) {
+			$output=$cmd{output_match};
+		} else {
+			$output=($opt{match_stderr})?"$cmd{output}$cmd{stderr}":"$cmd{output}";
+		}
+		$report_output=sprintf "%s%s - %s", 
+			($opt{name}) ? "$opt{name} " : "",
+			$rc{label}{$rc{rc}},
+			$output;
+
+	#--- print standard stuff 
+	} else {
+		$report_output=sprintf "%s%s - result:%s %s %s",
+			($opt{name}) ? "$opt{name} " : "",
+			$rc{label}{$rc{rc}},
+			defined($cmd{result}) 
+				? $cmd{result} 
+				: "[...]",
+			defined($cmd{match})
+				?  ($cmd{match} eq "none") 
+					? "" 
+					: "match:$cmd{match}"
+				: "match:[...]",
+			(@{$cmd{matchlist}}) 
+				? "severities:" . join(',',@{$cmd{matchlist}}) . " " 
+				: "";
+		#--- if delta specified, print old and new value
+		if (	$opt{type} eq "delta" && 
+			defined($cmd{old_output}) && 
+			defined($cmd{org_output}) && 
+			defined($cmd{elapsed_seconds})) {
+	
+			my $format = (is_integer($cmd{org_output})) ?  "old:%d new:%d time:%lds" : "old:%f new:%f time period:%lds";
+			$report_output.= sprintf $format, $cmd{old_output}, $cmd{org_output}, $cmd{elapsed_seconds};
+		}
+	}
+
+	#--- add errors if encountered
+	$report_output.=" [" . join(", ",@{$rc{error}}) . "]" if (defined($rc{error}[0]));
+
+	#--- replace all '|' with PIPE
+	print mysubst($report_output,"\\|","PIPE");
+
+	if ($opt{performance}) {
+		my $warn=0;
+		my $crit=0;
+		$warn=$1 if (defined ($opt{warning})  && $opt{warning}=~ /([-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)/);
+		$crit=$1 if (defined ($opt{critical}) && $opt{critical}=~/([-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)/);
+
+		# 'label'=value[UOM];[warn];[crit];[min];[max]
+		if ($warn || $crit) {
+			printf "|%s=%s;%f;%f;;", $opt{performance}, squeeze($cmd{output},"left",80),$warn,$crit; 
+		} else {
+			printf "|%s=%s;;;;", $opt{performance}, squeeze($cmd{output},"left",80) 
+		}
+	}
+	printf "\n";
+}
+
+sub defined_var {
+	my ($prefix,$var)=@_;
+	if (! eval "defined($var)") {
+		debug(1,"$prefix: var $var is not defined");
+		return 0;
+	}
+	return 1;
+}
+
+#-------------------------------------------------------------------------------
+#--- main ----------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+
+#--- parse command line options
+if (&process_parameters != $OK) {
+	exit $UNKNOWN;
+}
+
+#--- don't run this as root ;-)
+add_error("please don't run plugins as root!") if ($> == 0);
+
+#--- initialize timer for overall timeout
+$rc{starttime}=time;
+$rc{endtime}=$rc{starttime} + $opt{timeout};
+
+#--- execute command
+&exec_command(\%cmd);
+
+#--- analyze results
+$rc{rc}=&do_analysis(\%cmd);
+
+#--- report
+&do_report(\%cmd);
+
+#--- return rc with highest severity
+exit $rc{rc};
