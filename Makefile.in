@@ -6,6 +6,7 @@
 #--- Src directories
 SRC_PLUGINS=@srcdir@/plugins
 SRC_CONTRIB=@srcdir@/contrib
+SRC_PL_TEST=@srcdir@/plugins/t
 
 #---
 #--- user settings
@@ -65,6 +66,11 @@ contrib:
 	@ cd $(SRC_CONTRIB) && $(MAKE) -e $@
 
 #---
+#--- testing
+test:
+	@ cd $(SRC_PL_TEST) && $(MAKE) -e $@
+
+#---
 #--- install sections
 install:
 	@ cd $(SRC_PLUGINS) && $(MAKE) -e $@
@@ -82,6 +88,7 @@ fullinstall: install install-contrib
 #--- cleanup sections
 clean:
 	@ cd $(SRC_PLUGINS) && $(MAKE) -e $@
+	@ cd $(SRC_PL_TEST) && $(MAKE) -e $@
 	@ cd $(SRC_CONTRIB) && $(MAKE) -e $@
 	#-rm -f *.cfg core
 	#-rm -f *~ *.*~ */*~ */*.*~
@@ -90,6 +97,7 @@ clean:
 
 distclean: 
 	@ cd $(SRC_PLUGINS) && $(MAKE) -e $@
+	@ cd $(SRC_PL_TEST) && $(MAKE) -e $@
 	@ cd $(SRC_CONTRIB) && $(MAKE) -e $@
 	@ -rm -f Makefile config.status config.log subst
 

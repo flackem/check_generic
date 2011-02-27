@@ -1,0 +1,29 @@
+#---
+#--- Makefile plugins/t
+#---
+#--- $Id$
+#---
+prefix=@prefix@
+HTMLDIR=@datarootdir@
+INSTALL=@INSTALL@
+INSTALL_OPTS=@INSTALL_OPTS@
+PERLOPTS=-MExtUtils::Command::MM -e "test_harness($(VERBOSE))"
+
+all:
+
+clean:
+	-rm -f 10_check_generic.t
+	-rm -f testopts.pm
+	-rm -rf tmp
+
+distclean: clean
+	-rm -f Makefile
+
+devclean: distclean
+
+test: 
+	@PERL@ $(PERLOPTS) \
+		10_check_generic.t
+test-all:
+	@PERL@ $(PERLOPTS) \
+		10_check_generic.t

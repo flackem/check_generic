@@ -11,12 +11,12 @@ if ($INSTALL=~/^\.\//) {
 	my $pwd=`pwd`; chomp $pwd;
 	$INSTALL="$pwd/$INSTALL";
 }
-my $CM_VERSION=""; 
-if (-f "CM_VERSION") {
-	$CM_VERSION=`cat CM_VERSION`; 
-	chomp $CM_VERSION;
+my $CG_VERSION=""; 
+if (-f "CG_VERSION") {
+	$CG_VERSION=`cat CG_VERSION`; 
+	chomp $CG_VERSION;
 } else {
-	$CM_VERSION="undetermined";
+	$CG_VERSION="undetermined";
 }
 my $INSTALL_OPTS="@INSTALL_OPTS@";
 my $PERL="@PERL@";
@@ -71,8 +71,10 @@ while (my $f = shift @ARGV) {
 
 	while (<IN>) {
 		s|\@CHMOD\@|$CHMOD|g;
+		s|\@CG_VERSION\@|$CG_VERSION|g;
 		s|\@INSTALL\@|$INSTALL|g;
 		s|\@INSTALL_OPTS\@|$INSTALL_OPTS|g;
+		s|\@PERL\@|$PERL|g;
 		s|\@client_perl\@|$client_perl|g;
                 s|\@configfile\@|$configfile|g;
                 s|\@configure_args\@|$configure_args|g;

@@ -100,6 +100,7 @@ AC_CONFIG_FILES(
 	Makefile 
 	contrib/Makefile
 	plugins/Makefile
+	plugins/t/Makefile
 )
 
 AC_OUTPUT
@@ -108,7 +109,9 @@ AC_OUTPUT
 #--- substitution itself
 $PERL subst plugins/Makefile
 $PERL subst plugins/check_generic
-
+$PERL subst plugins/t/Makefile
+$PERL subst plugins/t/10_check_generic.t
+$PERL subst plugins/t/testopts.pm
 $PERL subst contrib/Makefile
 
 #---

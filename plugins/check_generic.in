@@ -127,7 +127,7 @@ sub process_parameters {
 	}
 
 	if ($opt{version}) {
-		print "$MYSELF: v$VERSION\n";
+		print "$MYSELF: $VERSION\n";
         	return $UNKNOWN;
 	}
 	if ($opt{help}) {

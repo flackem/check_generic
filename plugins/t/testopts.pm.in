@@ -1,0 +1,28 @@
+package testopts;
+
+use strict;
+use Exporter;
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+
+$VERSION     = 1.00;
+@ISA         = qw(Exporter);
+@EXPORT      = ();
+@EXPORT_OK   = qw(get_testopts);
+
+sub get_testopts  { 
+	my $set={
+		"name"			=> "''",
+		"report"		=> 13,
+		"timeout"		=> 10,
+		"tmpdir"		=> "tmp",
+		"type"			=> "scalar",
+		"verbose"		=> 0,
+	};
+	
+	my $testopts="";
+	foreach my $key (sort keys %{$set}) {
+		$testopts.=" --${key} $set->{$key}";
+	}
+	return $testopts;
+}
+1;

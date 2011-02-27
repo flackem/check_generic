@@ -1,0 +1,76 @@
+#! @PERL@ -w -I ..
+#
+# Process Tests via check_generic
+# thanks to Ton Voon for his persistency on testing ;)
+#
+
+use strict;
+use Test::More;
+use NPTest;
+use testopts;
+
+my $t;
+
+#--- add $libexec_dir to PATH to be sure that plugins will be called from libexec_dir
+my $libexec_dir="@libexecdir@";
+
+plan tests => 6;
+
+my $result;
+my $testopts=testopts::get_testopts;
+
+#-------------------------------------------------------------------------------
+#--- check_generic version -------------------------------------------------------
+#-------------------------------------------------------------------------------
+$result = NPTest->testCmd(
+	"@PERL@ ../check_generic -V"
+);
+print '-'x 80 ; print "\n";
+print $result->output; print "\n";
+print '-'x 80 ; print "\n";
+is(
+	$result->return_code, 
+	3, 
+	"check_generic version - RC3"
+);
+like(
+	$result->output,
+	'/^check_generic: check_generic_v\d{2,3}_\d{4}-\d{2}-\d{2}-\d{2}:\d{2}\n'.
+	'configure.*$/',
+	"output correct"
+);
+
+#-------------------------------------------------------------------------------
+#--- valid name option ---------------------------------------------------------
+#-------------------------------------------------------------------------------
+$result = NPTest->testCmd(
+	"@PERL@ ../check_generic $testopts -n 'test 234' -e 'echo \"567\"' -c '!~/567/'"
+);
+is(
+	$result->return_code, 
+	0, 
+	"valid name option - RC0"
+);
+like(
+	$result->output,
+	'/^test 234 OK - result:567\s*$/',
+	"output correct"
+);
+
+#-------------------------------------------------------------------------------
+#--- numerical comparison ------------------------------------------------------
+#-------------------------------------------------------------------------------
+$result = NPTest->testCmd(
+	"@PERL@ ../check_generic $testopts -e 'echo \"123.45\"' -c '>100'"
+);
+is(
+	$result->return_code, 
+	2, 
+	"numerical comparison - RC2"
+);
+like(
+	$result->output,
+	'/^CRITICAL - result:123.45 match:>100 severities:critical\s*$/',
+	"output correct"
+);
+
