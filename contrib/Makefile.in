@@ -1,8 +1,6 @@
 #---
 #--- Makefile contrib
 #---
-#--- $Id$
-#---
 prefix=@prefix@
 LIBEXECDIR=@libexecdir@
 HTMLDIR=@datarootdir@

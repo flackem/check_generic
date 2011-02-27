@@ -3,8 +3,6 @@
 #---
 #--- (c) 2008-2009 Matthias Flacke
 #---
-#--- $Id$
-#---
 #--- plenty of configuration options 
 #---
 #--- prerequisites, credits and Nagios defaults

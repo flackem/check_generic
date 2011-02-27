@@ -1,8 +1,6 @@
 #---
 #--- Makefile plugins
 #---
-#--- $Id$
-#---
 prefix=@prefix@
 CHMOD=@CHMOD@
 HTMLDIR=@datarootdir@
