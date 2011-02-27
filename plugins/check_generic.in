@@ -1,4 +1,5 @@
 #!@client_perl@ -w
+#nagios: -epn
 #
 # check_generic - nagios plugin
 #
@@ -18,7 +19,6 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #
-#nagios: -epn
 #
 use strict;
 use Getopt::Long qw(:config no_ignore_case bundling);
