@@ -237,7 +237,7 @@ Options:
    (can be a complete filter chain)
 -u|w|c|o, --unknown,warning,critical,ok <expression>
    operator is perl operators, e.g.
-      '= n'	- numerically equal
+      '== n'	- numerically equal
       '< n'	- numerically equal
       '> n'	- numerically equal
       'eq s'	- string equal
