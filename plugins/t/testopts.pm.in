@@ -11,6 +11,7 @@ $VERSION     = 1.00;
 
 sub get_testopts  { 
 	my $set={
+		"dont_be_paranoid"	=> 1,
 		"name"			=> "''",
 		"report"		=> 13,
 		"timeout"		=> 10,

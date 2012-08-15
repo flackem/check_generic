@@ -85,6 +85,7 @@ $DETAIL_PERFORMANCE=8;
 my %opt=(
 	set => {
 		"configfile"		=> "@configfile@",
+		"dont_be_paranoid"	=> 0,
 		"ignore_rc"		=> @ignore_rc@,
 		"empty_output_is_ok"	=> @empty_output_is_ok@,
 		"escape_chars"		=> "\"\'\$\@",
