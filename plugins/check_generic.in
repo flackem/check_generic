@@ -556,6 +556,7 @@ sub exec_command {
 		#--- timeout encountered: store status
 		if ($@ =~ /timeout/) {
 			$cmd{output}="UNKNOWN - command cancelled after timeout ($opt{set}{timeout}s)";
+			$cmd{stderr}="";
 			$cmd{rc}=$UNKNOWN;
 		#--- catchall for unknown errors
 		} else {
