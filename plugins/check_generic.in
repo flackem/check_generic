@@ -578,12 +578,12 @@ sub do_analysis {
 
 	#--- first: check return code
 	if ($opt{set}{ignore_rc}) {
-		if ($cmd{rc} != 0) {
+		if ($cmd{rc} != $OK) {
 			debug(2, "do_analysis: ignoring error return code $cmd{rc}");
 		}
 	} else {
 		#debug(2, "do_analysis: checking return code $cmd{rc}");
-		if ($cmd{rc} != 0) {
+		if ($cmd{rc} != $OK) {
 			debug(2, "do_analysis: return code $cmd{rc} != OK - returning UNKNOWN");
 			$cmd{result}="RC$cmd{rc} output:" . squeeze($cmd{output},"left",80);
 			$cmd{match}="RC!=OK";
@@ -601,7 +601,7 @@ sub do_analysis {
 	} 
 
 	#--- second: if empty output, something's wrong. return UNKNOWN
-	if ($cmd{output}eq "" && !$opt{set}{empty_output_is_ok}) {
+	if ($cmd{output} eq "" && !$opt{set}{empty_output_is_ok}) {
 		debug(2, "do_analysis: output is empty - returning UNKNOWN");
 		$cmd{result}="output is empty";
 		$cmd{match}="none";
@@ -781,7 +781,7 @@ if (&process_parameters != $OK) {
 }
 
 #--- don't run this as root ;-)
-add_error("please don't run plugins as root!") if ($> == 0);
+add_error("please don't run plugins as root!") if ($> == 0 && $opt{set}{dont_be_paranoid} == 0);
 
 #--- initialize timer for overall timeout
 $rc{starttime}=time;

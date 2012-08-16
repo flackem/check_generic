@@ -14,7 +14,7 @@ my $t;
 #--- add $libexec_dir to PATH to be sure that plugins will be called from libexec_dir
 my $libexec_dir="@libexecdir@";
 
-plan tests => 14;
+plan tests => 18;
 
 my $result;
 my $testopts=testopts::get_testopts;
@@ -139,5 +139,40 @@ is(
 like(
 	$result->output,
 	'/^OK - result:  $/',
+	"output correct"
+);
+
+#-------------------------------------------------------------------------------
+#--- result false: return non-OK RC --------------------------------------------
+#-------------------------------------------------------------------------------
+$result = NPTest->testCmd(
+	"@PERL@ ../check_generic $testopts -e 'echo 1' -c '>1' -f WARNING"
+
+);
+is(
+	$result->return_code, 
+	1, 
+	"false result with non OK RC - RC1"
+);
+like(
+	$result->output,
+	'/^WARNING - result:1  $/',
+	"output correct"
+);
+
+#-------------------------------------------------------------------------------
+#--- parse part of the result and put it to output -----------------------------
+#-------------------------------------------------------------------------------
+$result = NPTest->testCmd(
+	"@PERL@ ../check_generic $testopts -n weekend -e 'echo Sat Aug 18 13:20:01 CEST 2012' -c '=~/^(Sat\\s+\\S+\\s+\\d+)|^(Sun\\s+\\S+\\s+\\d+)/' --print_match"
+);
+is(
+	$result->return_code, 
+	2, 
+	"parse and snip part of the output - RC2"
+);
+like(
+	$result->output,
+	'/^weekend CRITICAL - Sat Aug 18$/',
 	"output correct"
 );
