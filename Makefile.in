@@ -67,6 +67,8 @@ contrib:
 
 #---
 #--- testing
+test-all:
+	@ cd $(SRC_PL_TEST) && $(MAKE) -e $@
 test:
 	@ cd $(SRC_PL_TEST) && $(MAKE) -e $@
 

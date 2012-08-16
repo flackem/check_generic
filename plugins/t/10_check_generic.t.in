@@ -14,7 +14,7 @@ my $t;
 #--- add $libexec_dir to PATH to be sure that plugins will be called from libexec_dir
 my $libexec_dir="@libexecdir@";
 
-plan tests => 8;
+plan tests => 14;
 
 my $result;
 my $testopts=testopts::get_testopts;
@@ -83,11 +83,61 @@ $result = NPTest->testCmd(
 is(
 	$result->return_code, 
 	1, 
-	"performance data - RC2"
+	"performance data - RC1"
 );
 like(
 	$result->output,
-#CRITICAL - result:123.45 match:>100 severities:critical |perf=123.45;0.000000;100.000000;;
 	'/^WARNING - result:123.45 match:>100 severities:warning\s*\|perf=123.45;100.000000;0.000000;;$/',
+	"output correct"
+);
+
+#-------------------------------------------------------------------------------
+#--- timeout handling ----------------------------------------------------------
+#-------------------------------------------------------------------------------
+$result = NPTest->testCmd(
+	"@PERL@ ../check_generic $testopts -t 1 -e 'sleep 2' -w 'ne \"\"'"
+);
+is(
+	$result->return_code, 
+	1, 
+	"timeout handling - RC1"
+);
+like(
+	$result->output,
+	'/^WARNING - result:UNKNOWN - command cancelled after timeout \(1s\) match:ne \"\" severities:warning $/',
+	"output correct"
+);
+
+#-------------------------------------------------------------------------------
+#--- empty_output_is_ok: NO ----------------------------------------------------
+#-------------------------------------------------------------------------------
+$result = NPTest->testCmd(
+	"@PERL@ ../check_generic $testopts -e 'echo' -c '=~/x/' -s empty_output_is_ok=0"
+);
+is(
+	$result->return_code, 
+	3, 
+	"empty output is NOT ok - RC3"
+);
+like(
+	$result->output,
+	'/^UNKNOWN - result:output is empty  $/',
+	"output correct"
+);
+
+#-------------------------------------------------------------------------------
+#--- empty_output_is_ok: YES ---------------------------------------------------
+#-------------------------------------------------------------------------------
+$result = NPTest->testCmd(
+	"@PERL@ ../check_generic $testopts -e 'echo' -c '=~/x/' -s empty_output_is_ok=1"
+);
+is(
+	$result->return_code, 
+	0, 
+	"empty output IS ok - RC0"
+);
+like(
+	$result->output,
+	'/^OK - result:  $/',
 	"output correct"
 );
