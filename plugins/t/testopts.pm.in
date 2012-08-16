@@ -22,7 +22,8 @@ sub get_testopts  {
 	
 	my $testopts="";
 	foreach my $key (sort keys %{$set}) {
-		$testopts.=" --${key} $set->{$key}";
+		#$testopts.=" --${key} $set->{$key}";
+                $testopts.=" -s $key=$set->{$key}";
 	}
 	return $testopts;
 }

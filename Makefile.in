@@ -31,7 +31,7 @@ none:
 	@echo ""
 	@echo " plugins           create plugins"
 	@echo " contrib           generate all contrib files"
-#	@echo " test              test plugins"
+	@echo " test              test plugins"
 	@echo ""
 	@echo ""
 	@echo " install           install check_generic plugin"
@@ -50,10 +50,10 @@ all:
 	@echo ""
 	@echo " Make process finished"
 	@echo ""
-#	@echo " *** Next step:  make test ***"
-#	@echo ""
-#	@echo "            or:  make test-all           (for all tests)"
-#	@echo ""
+	@echo " *** Next step:  make test ***"
+	@echo ""
+	@echo "            or:  make test-all           (for all tests)"
+	@echo ""
 	@echo " *** and then:   make install ***"
 	@echo ""
 	@echo "     - This installs the check_generic plugin"
@@ -67,8 +67,8 @@ contrib:
 
 #---
 #--- testing
-#test:
-#	@ cd $(SRC_PL_TEST) && $(MAKE) -e $@
+test:
+	@ cd $(SRC_PL_TEST) && $(MAKE) -e $@
 
 #---
 #--- install sections
@@ -97,7 +97,7 @@ clean:
 
 distclean: 
 	@ cd $(SRC_PLUGINS) && $(MAKE) -e $@
-#	@ cd $(SRC_PL_TEST) && $(MAKE) -e $@
+	@ cd $(SRC_PL_TEST) && $(MAKE) -e $@
 	@ cd $(SRC_CONTRIB) && $(MAKE) -e $@
 	@ -rm -f Makefile config.status config.log subst
 

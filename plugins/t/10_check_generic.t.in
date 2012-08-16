@@ -73,4 +73,3 @@ like(
 	'/^CRITICAL - result:123.45 match:>100 severities:critical\s*$/',
 	"output correct"
 );
-
