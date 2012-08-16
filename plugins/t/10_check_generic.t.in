@@ -14,7 +14,7 @@ my $t;
 #--- add $libexec_dir to PATH to be sure that plugins will be called from libexec_dir
 my $libexec_dir="@libexecdir@";
 
-plan tests => 6;
+plan tests => 8;
 
 my $result;
 my $testopts=testopts::get_testopts;
@@ -71,5 +71,23 @@ is(
 like(
 	$result->output,
 	'/^CRITICAL - result:123.45 match:>100 severities:critical\s*$/',
+	"output correct"
+);
+
+#-------------------------------------------------------------------------------
+#--- performance data ----------------------------------------------------------
+#-------------------------------------------------------------------------------
+$result = NPTest->testCmd(
+	"@PERL@ ../check_generic $testopts -e 'echo \"123.45\"' -w '>100' -p perf"
+);
+is(
+	$result->return_code, 
+	1, 
+	"performance data - RC2"
+);
+like(
+	$result->output,
+#CRITICAL - result:123.45 match:>100 severities:critical |perf=123.45;0.000000;100.000000;;
+	'/^WARNING - result:123.45 match:>100 severities:warning\s*\|perf=123.45;100.000000;0.000000;;$/',
 	"output correct"
 );
